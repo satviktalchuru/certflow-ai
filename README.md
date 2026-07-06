@@ -112,6 +112,16 @@ Then open:
 http://127.0.0.1:8080
 ```
 
+## Deploy
+
+CertFlow includes Docker and Render deployment packaging:
+
+- `Dockerfile`
+- `render.yaml`
+- `docs/deployment.md`
+
+The container runs the same Go backend and static dashboard, seeds demo data on startup, and serves the app on `$PORT`.
+
 ## API Surface
 
 ```text

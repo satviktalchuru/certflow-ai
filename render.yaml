@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: certflow-ai
+    runtime: docker
+    plan: free
+    autoDeploy: true
+    envVars:
+      - key: CERTFLOW_DB
+        value: /tmp/certflow.db
+      - key: CERTFLOW_AI_PROVIDER
+        value: local

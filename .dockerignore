@@ -1,0 +1,7 @@
+.git
+tmp
+bin
+.DS_Store
+*.db
+*.sqlite
+*.sqlite3
