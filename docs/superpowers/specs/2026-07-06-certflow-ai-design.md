@@ -10,6 +10,8 @@ The project is inspired by a common enterprise reliability problem, not by any c
 
 CertFlow AI should feel like a small but credible internal platform product that could plausibly be built by an SRE/platform team at a company like Microsoft, Google, Oracle, Salesforce, ServiceNow, Adobe, Intuit, Workday, Atlassian, Snowflake, Palo Alto Networks, CrowdStrike, Akamai, or NetApp.
 
+The project should be backend-first. The web UI exists to make the system easy to understand and demo, but the strongest engineering signal must come from a fully functional Go backend: concurrent scanners, durable inventory, typed database access, production-style REST APIs, deterministic risk scoring, provider importers, observability, and AI reports grounded in real scan data.
+
 ## Problem Being Solved
 
 Modern software companies operate thousands of services, domains, ingress routes, APIs, internal tools, customer-facing applications, and machine-to-machine integrations. TLS certificates are attached to many of those surfaces. Certificate lifecycle management becomes difficult because the operational truth is distributed:
@@ -74,6 +76,7 @@ Secondary users:
 5. Generate renewal runbooks grounded in actual certificate metadata.
 6. Expose recruiter-impressive APIs, CLI workflows, database schema, concurrent scanning, and observability.
 7. Avoid copying confidential internal systems; use public APIs, mock data, local demos, and generic enterprise patterns.
+8. Keep the frontend simple, sleek, modern, and easy to traverse while making the backend the functional core of the project.
 
 ## Non-Goals
 
@@ -115,6 +118,7 @@ Frontend:
 
 - Next.js, TypeScript, Tailwind, shadcn/ui.
 - Dashboard pages for inventory, risk queue, certificate detail, ownership graph, handoff reports, and scan history.
+- The frontend should be intentionally thin: it should call the Go API for all data, avoid duplicating business logic, and focus on a polished operational workflow rather than complex visual effects.
 
 Infrastructure:
 
@@ -160,6 +164,38 @@ CertFlow AI has five major components:
 5. Dashboard and CLI
    - CLI supports local-first workflows for engineers.
    - Dashboard supports inventory review, risk triage, generated handoff docs, and historical scan visibility.
+   - Dashboard does not own risk logic, certificate parsing, report generation, or fixture transformation; all of that belongs in the Go backend.
+
+## Backend-First Requirements
+
+The backend must be functional enough that the project remains impressive even if the frontend is temporarily removed. A recruiter or engineer should be able to run the CLI/API, inspect the database, call endpoints with curl, and see a real certificate reliability workflow.
+
+Required backend capabilities:
+
+- Start a Go API server with documented REST endpoints.
+- Accept scan jobs through both CLI and HTTP API.
+- Concurrently scan real TLS endpoints from an explicit target list.
+- Parse X.509 certificate chains using Go standard library primitives.
+- Persist scan runs, certificates, SANs, deployments, services, owners, risks, and AI reports.
+- Deduplicate certificates by SHA-256 fingerprint.
+- Compute deterministic risk findings before any AI generation.
+- Generate structured AI handoff reports from stored evidence.
+- Reject AI reports that cite missing evidence IDs.
+- Export handoff reports as Markdown.
+- Import provider-style data from at least one realistic fixture source in the MVP.
+- Emit structured logs and basic OpenTelemetry traces/metrics.
+- Include unit tests and integration tests for scanner, parser, risk engine, API handlers, and AI output validation.
+
+Backend acceptance criteria:
+
+- `certflow scan --targets fixtures/demo-domains.yaml` produces persisted certificates and risk findings.
+- `POST /v1/scans` starts a scan and `GET /v1/scans/{scan_id}/results` returns parsed results.
+- `GET /v1/certificates` returns inventory from the database, not hardcoded frontend data.
+- `GET /v1/risks` returns deterministic findings from the risk engine.
+- `POST /v1/ai/handoff-reports` creates a schema-validated report grounded in evidence IDs.
+- `certflow report export --service <id>` writes a Markdown handoff packet.
+- The test suite can run without cloud credentials by using local TLS demo services and fixture imports.
+- The frontend can be rebuilt or replaced without changing backend business logic.
 
 ## Data Model
 
@@ -540,6 +576,8 @@ Guardrails:
 
 ## Dashboard Requirements
 
+The UI should be modern, clean, and easy to traverse, but it should not be the hardest part of the project. It should make the backend legible.
+
 Pages:
 
 1. Overview
@@ -671,19 +709,28 @@ Milestone 2: API and database
 - Store scan runs, certificates, SANs, deployments, and risk findings.
 - Add `GET /v1/certificates`, `GET /v1/risks`, and `POST /v1/scans`.
 
-Milestone 3: AI handoff generator
+Milestone 3: Backend completeness and test coverage
+
+- Add integration tests with local HTTPS demo services.
+- Add risk-engine test fixtures.
+- Add API handler tests.
+- Add scan cancellation and scan event streaming.
+- Add structured logs and basic OpenTelemetry instrumentation.
+
+Milestone 4: AI handoff generator
 
 - Add structured AI report generation.
 - Store generated reports.
 - Validate evidence IDs.
 - Export Markdown handoff reports.
 
-Milestone 4: Dashboard
+Milestone 5: Dashboard
 
 - Build inventory, risk queue, certificate detail, and handoff report pages.
 - Add live scan stream.
+- Keep UI data flow API-driven; no hardcoded production data outside demo seed fixtures.
 
-Milestone 5: Integrations and polish
+Milestone 6: Integrations and polish
 
 - Add fixture-based AWS ACM import.
 - Add fixture-based GCP Certificate Manager import.
@@ -734,11 +781,12 @@ AI engineering version:
 
 ## Recommended MVP Decision
 
-Build the project CLI-first with a simple dashboard second:
+Build the project backend-first with a simple, sleek dashboard second:
 
 1. `certflow scan` proves Go, networking, certificates, and concurrency.
 2. `certflow serve` proves API and persistence.
-3. `certflow handoff generate` proves applied AI.
-4. The dashboard makes the result demoable.
+3. `GET /v1/certificates`, `GET /v1/risks`, and `POST /v1/scans` prove real API functionality.
+4. `certflow handoff generate` proves applied AI grounded in backend evidence.
+5. The dashboard makes the result demoable and easy to navigate.
 
 This ordering keeps Go central and prevents the project from becoming a frontend-heavy wrapper around an LLM.
