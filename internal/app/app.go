@@ -3,11 +3,11 @@ package app
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/satviktalchuru/certflow-ai/internal/certscan"
 	"github.com/satviktalchuru/certflow-ai/internal/domain"
+	"github.com/satviktalchuru/certflow-ai/internal/report"
 	"github.com/satviktalchuru/certflow-ai/internal/risk"
 )
 
@@ -24,12 +24,14 @@ type Config struct {
 	Store              Store
 	Now                func() time.Time
 	InsecureSkipVerify bool
+	ReportGenerator    report.Generator
 }
 
 type App struct {
 	store              Store
 	now                func() time.Time
 	insecureSkipVerify bool
+	reportGenerator    report.Generator
 }
 
 func New(cfg Config) *App {
@@ -37,7 +39,11 @@ func New(cfg Config) *App {
 	if now == nil {
 		now = func() time.Time { return time.Now().UTC() }
 	}
-	return &App{store: cfg.Store, now: now, insecureSkipVerify: cfg.InsecureSkipVerify}
+	generator := cfg.ReportGenerator
+	if generator == nil {
+		generator = report.LocalGenerator{}
+	}
+	return &App{store: cfg.Store, now: now, insecureSkipVerify: cfg.InsecureSkipVerify, reportGenerator: generator}
 }
 
 func (a *App) RunScan(ctx context.Context, name string, targets []domain.Target) (domain.ScanRun, error) {
@@ -106,32 +112,29 @@ func (a *App) GenerateHandoffReport(certificateID string) (domain.HandoffReport,
 	}
 	riskTitles := make([]string, 0)
 	evidenceIDs := make([]string, 0)
+	matchingRisks := make([]domain.RiskFinding, 0)
 	for _, finding := range allRisks {
 		if finding.CertificateID == certificateID {
+			matchingRisks = append(matchingRisks, finding)
 			riskTitles = append(riskTitles, fmt.Sprintf("%s: %s", finding.Severity, finding.Title))
 			evidenceIDs = append(evidenceIDs, finding.ID)
 		}
 	}
 	now := a.now()
+	content, err := a.reportGenerator.Generate(context.Background(), report.Input{Certificate: cert, Risks: matchingRisks})
+	if err != nil {
+		return domain.HandoffReport{}, err
+	}
 	report := domain.HandoffReport{
-		ID:            "report_" + compactTimestamp(now),
-		CertificateID: certificateID,
-		ServiceID:     cert.ServiceID,
-		Summary:       handoffSummary(cert, riskTitles),
-		Risks:         riskTitles,
-		HandoffChecklist: []string{
-			"Confirm the owning team and escalation channel.",
-			"Verify the renewal method and deployment path.",
-			"Run a fresh CertFlow scan after renewal.",
-		},
-		RenewalSteps: []string{
-			"Identify the certificate issuer and renewal mechanism.",
-			"Renew or reissue the certificate before the risk window closes.",
-			"Deploy the updated certificate to every mapped endpoint.",
-			"Validate TLS handshake and certificate chain from CertFlow.",
-		},
-		EvidenceIDs: evidenceIDs,
-		CreatedAt:   now,
+		ID:               "report_" + compactTimestamp(now),
+		CertificateID:    certificateID,
+		ServiceID:        cert.ServiceID,
+		Summary:          content.Summary,
+		Risks:            defaultStrings(content.Risks, riskTitles),
+		HandoffChecklist: content.HandoffChecklist,
+		RenewalSteps:     content.RenewalSteps,
+		EvidenceIDs:      defaultStrings(content.EvidenceIDs, evidenceIDs),
+		CreatedAt:        now,
 	}
 	if err := a.store.SaveReport(report); err != nil {
 		return domain.HandoffReport{}, err
@@ -244,15 +247,11 @@ func (a *App) ImportCertificates(source string, certs []domain.Certificate) erro
 	return a.store.SaveScan(scan)
 }
 
-func handoffSummary(cert domain.Certificate, risks []string) string {
-	owner := cert.OwnerTeam
-	if strings.TrimSpace(owner) == "" {
-		owner = "unassigned"
+func defaultStrings(values, fallback []string) []string {
+	if len(values) > 0 {
+		return values
 	}
-	if len(risks) == 0 {
-		return fmt.Sprintf("Certificate %s for %s is assigned to %s with no open CertFlow risks.", cert.ID, cert.Endpoint, owner)
-	}
-	return fmt.Sprintf("Certificate %s for %s needs handoff attention: %d open risk(s), owner %s.", cert.ID, cert.Endpoint, len(risks), owner)
+	return fallback
 }
 
 func compactTimestamp(t time.Time) string {

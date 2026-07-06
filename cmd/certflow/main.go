@@ -17,6 +17,7 @@ import (
 	"github.com/satviktalchuru/certflow-ai/internal/domain"
 	"github.com/satviktalchuru/certflow-ai/internal/httpapi"
 	"github.com/satviktalchuru/certflow-ai/internal/importer"
+	"github.com/satviktalchuru/certflow-ai/internal/report"
 	"github.com/satviktalchuru/certflow-ai/internal/store"
 )
 
@@ -62,7 +63,7 @@ func runSeed(args []string) error {
 		return err
 	}
 	defer closeStore()
-	if err := app.New(app.Config{Store: st}).SeedDemoData(); err != nil {
+	if err := app.New(app.Config{Store: st, ReportGenerator: reportGeneratorFromEnv()}).SeedDemoData(); err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stdout, "Seeded demo certificate inventory at %s\n", *dbPath)
@@ -123,7 +124,7 @@ func runImport(args []string) error {
 		return err
 	}
 	defer closeStore()
-	if err := app.New(app.Config{Store: st}).ImportCertificates(*provider, certs); err != nil {
+	if err := app.New(app.Config{Store: st, ReportGenerator: reportGeneratorFromEnv()}).ImportCertificates(*provider, certs); err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stdout, "Imported %d certificate(s) from %s into %s\n", len(certs), *provider, *dbPath)
@@ -148,7 +149,7 @@ func runScan(args []string) error {
 		return err
 	}
 	defer closeStore()
-	application := app.New(app.Config{Store: st, InsecureSkipVerify: *insecure})
+	application := app.New(app.Config{Store: st, InsecureSkipVerify: *insecure, ReportGenerator: reportGeneratorFromEnv()})
 	scan, err := application.RunScan(context.Background(), *name, targets)
 	if err != nil {
 		return err
@@ -169,7 +170,7 @@ func runServe(args []string) error {
 		return err
 	}
 	defer closeStore()
-	application := app.New(app.Config{Store: st, InsecureSkipVerify: *insecure})
+	application := app.New(app.Config{Store: st, InsecureSkipVerify: *insecure, ReportGenerator: reportGeneratorFromEnv()})
 	server := httpapi.NewServer(application)
 	log.Printf("CertFlow AI listening on http://%s", *addr)
 	return http.ListenAndServe(*addr, server)
@@ -186,7 +187,7 @@ func runRisks(args []string) error {
 		return err
 	}
 	defer closeStore()
-	risks, err := app.New(app.Config{Store: st}).ListRisks()
+	risks, err := app.New(app.Config{Store: st, ReportGenerator: reportGeneratorFromEnv()}).ListRisks()
 	if err != nil {
 		return err
 	}
@@ -209,7 +210,7 @@ func runReport(args []string) error {
 		return err
 	}
 	defer closeStore()
-	report, err := app.New(app.Config{Store: st}).GenerateHandoffReport(*certID)
+	report, err := app.New(app.Config{Store: st, ReportGenerator: reportGeneratorFromEnv()}).GenerateHandoffReport(*certID)
 	if err != nil {
 		return err
 	}
@@ -325,6 +326,17 @@ func openStore(path string) (app.Store, func(), error) {
 	default:
 		return store.NewJSONStore(path), func() {}, nil
 	}
+}
+
+func reportGeneratorFromEnv() report.Generator {
+	if strings.EqualFold(os.Getenv("CERTFLOW_AI_PROVIDER"), "openai") {
+		return report.OpenAIGenerator{
+			APIKey:   os.Getenv("OPENAI_API_KEY"),
+			Model:    os.Getenv("OPENAI_MODEL"),
+			Endpoint: os.Getenv("OPENAI_RESPONSES_ENDPOINT"),
+		}
+	}
+	return report.LocalGenerator{}
 }
 
 func writeTargets(path string, targets []domain.Target) error {

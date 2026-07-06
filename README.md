@@ -23,7 +23,7 @@ CertFlow AI turns those questions into scan data, risk findings, APIs, and hando
 - X.509 metadata extraction with `crypto/tls` and `crypto/x509`.
 - SQLite-backed persistence for scans, certificates, risks, and reports, with JSON file storage still available for lightweight demos.
 - Deterministic risk engine for expiration, missing ownership, and unknown renewal paths.
-- Evidence-backed handoff report generation.
+- Evidence-backed handoff report generation with a local deterministic generator by default and optional OpenAI structured-output generation.
 - Static landing page and dashboard served by the Go app.
 
 ## Run Tests
@@ -122,6 +122,26 @@ GET  /v1/risks
 GET  /v1/scans
 POST /v1/scans
 POST /v1/ai/handoff-reports
+```
+
+## AI Report Generation
+
+By default, CertFlow uses a deterministic local report generator so tests and demos do not require network access.
+
+To use OpenAI structured-output generation for handoff reports:
+
+```bash
+export CERTFLOW_AI_PROVIDER=openai
+export OPENAI_API_KEY=sk-...
+export OPENAI_MODEL=gpt-5.5
+
+go run ./cmd/certflow serve --db tmp/certflow.db --addr 127.0.0.1:8080
+```
+
+Optional:
+
+```bash
+export OPENAI_RESPONSES_ENDPOINT=https://api.openai.com/v1/responses
 ```
 
 Example scan request:
