@@ -63,3 +63,29 @@ func TestServerExposesHealthCertificatesRisksAndReports(t *testing.T) {
 		t.Fatalf("expected evidence risk_1, got %#v", report.EvidenceIDs)
 	}
 }
+
+func TestServerExposesOpenAPISpec(t *testing.T) {
+	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	st := store.NewJSONStore(filepath.Join(t.TempDir(), "certflow.json"))
+	server := NewServer(app.New(app.Config{Store: st, Now: func() time.Time { return now }}))
+
+	resp := httptest.NewRecorder()
+	server.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/v1/openapi.json", nil))
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.Code)
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(resp.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode openapi json: %v", err)
+	}
+	if payload["openapi"] != "3.1.0" {
+		t.Fatalf("expected OpenAPI 3.1.0, got %#v", payload["openapi"])
+	}
+	paths := payload["paths"].(map[string]interface{})
+	for _, path := range []string{"/v1/healthz", "/v1/certificates", "/v1/risks", "/v1/scans", "/v1/ai/handoff-reports"} {
+		if _, ok := paths[path]; !ok {
+			t.Fatalf("expected path %s in OpenAPI spec", path)
+		}
+	}
+}

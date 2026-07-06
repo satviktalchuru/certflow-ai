@@ -76,6 +76,7 @@ http://127.0.0.1:8080
 
 ```text
 GET  /v1/healthz
+GET  /v1/openapi.json
 GET  /v1/certificates
 GET  /v1/risks
 GET  /v1/scans
