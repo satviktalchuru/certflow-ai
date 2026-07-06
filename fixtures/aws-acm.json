@@ -1,0 +1,15 @@
+{
+  "certificates": [
+    {
+      "certificateArn": "arn:aws:acm:us-east-1:123456789012:certificate/api-prod",
+      "domainName": "api.aws.certflow.demo",
+      "subjectAlternativeNames": ["api.aws.certflow.demo", "edge.aws.certflow.demo"],
+      "issuer": "Amazon",
+      "serial": "aws-demo-001",
+      "notBefore": "2026-01-01T00:00:00Z",
+      "notAfter": "2026-07-20T00:00:00Z",
+      "renewalEligibility": "ELIGIBLE",
+      "ownerTeam": "cloud-platform"
+    }
+  ]
+}

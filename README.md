@@ -79,6 +79,27 @@ SQLite is the default backend for `.db`, `.sqlite`, and `.sqlite3` paths. A `.js
 go run ./cmd/certflow seed --db tmp/certflow.json
 ```
 
+## Import Provider Fixtures
+
+CertFlow includes production-shaped fixture importers for cloud and Kubernetes certificate inventory:
+
+```bash
+go run ./cmd/certflow import \
+  --provider aws-acm \
+  --fixture fixtures/aws-acm.json \
+  --db tmp/certflow.db
+
+go run ./cmd/certflow import \
+  --provider gcp-certificate-manager \
+  --fixture fixtures/gcp-certificate-manager.json \
+  --db tmp/certflow.db
+
+go run ./cmd/certflow import \
+  --provider cert-manager \
+  --fixture fixtures/cert-manager.json \
+  --db tmp/certflow.db
+```
+
 ## Start The Web App
 
 ```bash
@@ -137,6 +158,7 @@ curl -X POST http://127.0.0.1:8080/v1/ai/handoff-reports \
 certflow scan   --targets fixtures/demo-domains.yaml --db tmp/certflow.db
 certflow demo-services --targets-out tmp/local-demo-domains.yaml
 certflow seed   --db tmp/certflow.db
+certflow import --provider aws-acm --fixture fixtures/aws-acm.json --db tmp/certflow.db
 certflow serve  --db tmp/certflow.db --addr 127.0.0.1:8080
 certflow risks  --db tmp/certflow.db
 certflow report --db tmp/certflow.db --certificate-id cert_x --out handoff.md
@@ -159,9 +181,5 @@ SQLite Store
 ## Roadmap
 
 - Postgres persistence with migrations.
-- OpenAPI document generation.
-- AWS ACM fixture importer.
-- GCP Certificate Manager fixture importer.
-- Kubernetes cert-manager importer.
 - OpenTelemetry traces and metrics.
 - Provider-backed structured AI report generation.

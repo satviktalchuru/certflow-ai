@@ -108,3 +108,39 @@ func TestSeedDemoDataCreatesOfflineDashboardInventory(t *testing.T) {
 		t.Fatal("expected demo risks")
 	}
 }
+
+func TestImportCertificatesStoresProviderInventoryAndRisks(t *testing.T) {
+	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	app := New(Config{
+		Store: store.NewJSONStore(filepath.Join(t.TempDir(), "certflow.json")),
+		Now:   func() time.Time { return now },
+	})
+
+	err := app.ImportCertificates("aws-acm", []domain.Certificate{{
+		ID:                "cert_imported",
+		FingerprintSHA256: "sha256:imported",
+		SerialNumber:      "imported",
+		NotAfter:          now.Add(10 * 24 * time.Hour),
+		Source:            "aws-acm",
+		Endpoint:          "api.example.com:443",
+		OwnerTeam:         "platform",
+		RenewalMethod:     "aws-acm-managed",
+	}})
+	if err != nil {
+		t.Fatalf("import certificates: %v", err)
+	}
+	certs, err := app.ListCertificates()
+	if err != nil {
+		t.Fatalf("list certs: %v", err)
+	}
+	if len(certs) != 1 || certs[0].ID != "cert_imported" {
+		t.Fatalf("expected imported cert, got %#v", certs)
+	}
+	risks, err := app.ListRisks()
+	if err != nil {
+		t.Fatalf("list risks: %v", err)
+	}
+	if len(risks) != 1 || risks[0].Category != "expiration" {
+		t.Fatalf("expected expiration risk for imported cert, got %#v", risks)
+	}
+}

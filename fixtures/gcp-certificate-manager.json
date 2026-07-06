@@ -1,0 +1,12 @@
+{
+  "certificates": [
+    {
+      "name": "projects/certflow-demo/locations/global/certificates/api-prod",
+      "managed": {
+        "domains": ["api.gcp.certflow.demo"]
+      },
+      "expireTime": "2026-08-01T00:00:00Z",
+      "ownerTeam": "cloud-platform"
+    }
+  ]
+}

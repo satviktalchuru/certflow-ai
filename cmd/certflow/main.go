@@ -16,6 +16,7 @@ import (
 	"github.com/satviktalchuru/certflow-ai/internal/demo"
 	"github.com/satviktalchuru/certflow-ai/internal/domain"
 	"github.com/satviktalchuru/certflow-ai/internal/httpapi"
+	"github.com/satviktalchuru/certflow-ai/internal/importer"
 	"github.com/satviktalchuru/certflow-ai/internal/store"
 )
 
@@ -33,6 +34,8 @@ func main() {
 		err = runDemoServices(os.Args[2:])
 	case "seed":
 		err = runSeed(os.Args[2:])
+	case "import":
+		err = runImport(os.Args[2:])
 	case "serve":
 		err = runServe(os.Args[2:])
 	case "risks":
@@ -84,6 +87,47 @@ func runDemoServices(args []string) error {
 	fmt.Fprintln(os.Stdout, "Scan with:")
 	fmt.Fprintf(os.Stdout, "  go run ./cmd/certflow scan --targets %s --db tmp/certflow.db --insecure-skip-verify\n", *targetsPath)
 	select {}
+}
+
+func runImport(args []string) error {
+	fs := flag.NewFlagSet("import", flag.ExitOnError)
+	provider := fs.String("provider", "", "provider: aws-acm, gcp-certificate-manager, cert-manager")
+	fixturePath := fs.String("fixture", "", "path to provider fixture JSON")
+	dbPath := fs.String("db", "tmp/certflow.db", "path to SQLite or JSON database")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if strings.TrimSpace(*provider) == "" || strings.TrimSpace(*fixturePath) == "" {
+		return fmt.Errorf("--provider and --fixture are required")
+	}
+
+	var (
+		certs []domain.Certificate
+		err   error
+	)
+	switch *provider {
+	case "aws-acm":
+		certs, err = importer.ImportAWSACM(*fixturePath)
+	case "gcp-certificate-manager":
+		certs, err = importer.ImportGCPCertificateManager(*fixturePath)
+	case "cert-manager":
+		certs, err = importer.ImportCertManager(*fixturePath)
+	default:
+		return fmt.Errorf("unsupported provider %q", *provider)
+	}
+	if err != nil {
+		return err
+	}
+	st, closeStore, err := openStore(*dbPath)
+	if err != nil {
+		return err
+	}
+	defer closeStore()
+	if err := app.New(app.Config{Store: st}).ImportCertificates(*provider, certs); err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stdout, "Imported %d certificate(s) from %s into %s\n", len(certs), *provider, *dbPath)
+	return nil
 }
 
 func runScan(args []string) error {
@@ -311,6 +355,7 @@ Usage:
   certflow scan   --targets fixtures/demo-domains.yaml --db tmp/certflow.db
   certflow demo-services --targets-out tmp/local-demo-domains.yaml
   certflow seed   --db tmp/certflow.db
+  certflow import --provider aws-acm --fixture fixtures/aws-acm.json --db tmp/certflow.db
   certflow serve  --db tmp/certflow.db --addr 127.0.0.1:8080
   certflow risks  --db tmp/certflow.db
   certflow report --db tmp/certflow.db --certificate-id cert_x --out handoff.md

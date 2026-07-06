@@ -220,6 +220,30 @@ func (a *App) SeedDemoData() error {
 	return a.store.SaveScan(scan)
 }
 
+func (a *App) ImportCertificates(source string, certs []domain.Certificate) error {
+	if a.store == nil {
+		return fmt.Errorf("store is required")
+	}
+	now := a.now()
+	findings := make([]domain.RiskFinding, 0)
+	for i := range certs {
+		if certs[i].FirstSeenAt.IsZero() {
+			certs[i].FirstSeenAt = now
+		}
+		certs[i].LastSeenAt = now
+		findings = append(findings, risk.Evaluate(now, certs[i])...)
+	}
+	scan := domain.ScanRun{
+		ID:           "import_" + source + "_" + compactTimestamp(now),
+		Name:         "fixture-import-" + source,
+		StartedAt:    now,
+		CompletedAt:  now,
+		Certificates: certs,
+		Risks:        findings,
+	}
+	return a.store.SaveScan(scan)
+}
+
 func handoffSummary(cert domain.Certificate, risks []string) string {
 	owner := cert.OwnerTeam
 	if strings.TrimSpace(owner) == "" {

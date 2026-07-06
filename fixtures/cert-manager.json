@@ -1,0 +1,19 @@
+{
+  "items": [
+    {
+      "metadata": {
+        "name": "api-cert",
+        "namespace": "prod"
+      },
+      "spec": {
+        "dnsNames": ["api.k8s.certflow.demo"],
+        "secretName": "api-tls",
+        "issuerRef": {"name": "letsencrypt-prod"}
+      },
+      "status": {
+        "notBefore": "2026-01-01T00:00:00Z",
+        "notAfter": "2026-09-01T00:00:00Z"
+      }
+    }
+  ]
+}
