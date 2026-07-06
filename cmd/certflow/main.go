@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/satviktalchuru/certflow-ai/internal/app"
+	"github.com/satviktalchuru/certflow-ai/internal/demo"
 	"github.com/satviktalchuru/certflow-ai/internal/domain"
 	"github.com/satviktalchuru/certflow-ai/internal/httpapi"
 	"github.com/satviktalchuru/certflow-ai/internal/store"
@@ -28,6 +29,8 @@ func main() {
 	switch os.Args[1] {
 	case "scan":
 		err = runScan(os.Args[2:])
+	case "demo-services":
+		err = runDemoServices(os.Args[2:])
 	case "seed":
 		err = runSeed(os.Args[2:])
 	case "serve":
@@ -61,6 +64,26 @@ func runSeed(args []string) error {
 	}
 	fmt.Fprintf(os.Stdout, "Seeded demo certificate inventory at %s\n", *dbPath)
 	return nil
+}
+
+func runDemoServices(args []string) error {
+	fs := flag.NewFlagSet("demo-services", flag.ExitOnError)
+	targetsPath := fs.String("targets-out", "tmp/local-demo-domains.yaml", "path to write local demo targets")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	services, err := demo.StartTLSServices()
+	if err != nil {
+		return err
+	}
+	defer services.Close()
+	if err := writeTargets(*targetsPath, services.Targets()); err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stdout, "Local TLS demo services running. Targets written to %s\n", *targetsPath)
+	fmt.Fprintln(os.Stdout, "Scan with:")
+	fmt.Fprintf(os.Stdout, "  go run ./cmd/certflow scan --targets %s --db tmp/certflow.db --insecure-skip-verify\n", *targetsPath)
+	select {}
 }
 
 func runScan(args []string) error {
@@ -260,11 +283,33 @@ func openStore(path string) (app.Store, func(), error) {
 	}
 }
 
+func writeTargets(path string, targets []domain.Target) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	var b strings.Builder
+	b.WriteString("targets:\n")
+	for _, target := range targets {
+		fmt.Fprintf(&b, "  - host: %s\n", target.Host)
+		fmt.Fprintf(&b, "    port: %d\n", target.Port)
+		fmt.Fprintf(&b, "    service_id: %s\n", target.ServiceID)
+		fmt.Fprintf(&b, "    environment: %s\n", target.Environment)
+		if target.OwnerTeam != "" {
+			fmt.Fprintf(&b, "    owner_team: %s\n", target.OwnerTeam)
+		}
+		if target.RenewalMethod != "" {
+			fmt.Fprintf(&b, "    renewal_method: %s\n", target.RenewalMethod)
+		}
+	}
+	return os.WriteFile(path, []byte(b.String()), 0o644)
+}
+
 func usage() {
 	fmt.Fprintf(os.Stderr, `CertFlow AI
 
 Usage:
   certflow scan   --targets fixtures/demo-domains.yaml --db tmp/certflow.db
+  certflow demo-services --targets-out tmp/local-demo-domains.yaml
   certflow seed   --db tmp/certflow.db
   certflow serve  --db tmp/certflow.db --addr 127.0.0.1:8080
   certflow risks  --db tmp/certflow.db

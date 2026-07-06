@@ -46,6 +46,25 @@ For local TLS demo services with self-signed certificates, add:
 --insecure-skip-verify
 ```
 
+## Run Real Local TLS Demo Services
+
+Start three local HTTPS services with generated certificates:
+
+```bash
+go run ./cmd/certflow demo-services --targets-out tmp/local-demo-domains.yaml
+```
+
+In another terminal, scan them:
+
+```bash
+go run ./cmd/certflow scan \
+  --targets tmp/local-demo-domains.yaml \
+  --db tmp/certflow.db \
+  --insecure-skip-verify
+```
+
+The local demo includes a healthy certificate, an expiring certificate, and an ownerless certificate.
+
 ## Seed Offline Demo Data
 
 If the local environment cannot reach public DNS/TLS endpoints, seed the dashboard with realistic demo inventory:
@@ -116,6 +135,7 @@ curl -X POST http://127.0.0.1:8080/v1/ai/handoff-reports \
 
 ```bash
 certflow scan   --targets fixtures/demo-domains.yaml --db tmp/certflow.db
+certflow demo-services --targets-out tmp/local-demo-domains.yaml
 certflow seed   --db tmp/certflow.db
 certflow serve  --db tmp/certflow.db --addr 127.0.0.1:8080
 certflow risks  --db tmp/certflow.db
