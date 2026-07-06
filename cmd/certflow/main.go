@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -46,11 +47,16 @@ func main() {
 
 func runSeed(args []string) error {
 	fs := flag.NewFlagSet("seed", flag.ExitOnError)
-	dbPath := fs.String("db", "tmp/certflow.json", "path to JSON database")
+	dbPath := fs.String("db", "tmp/certflow.db", "path to SQLite or JSON database")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if err := app.New(app.Config{Store: store.NewJSONStore(*dbPath)}).SeedDemoData(); err != nil {
+	st, closeStore, err := openStore(*dbPath)
+	if err != nil {
+		return err
+	}
+	defer closeStore()
+	if err := app.New(app.Config{Store: st}).SeedDemoData(); err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stdout, "Seeded demo certificate inventory at %s\n", *dbPath)
@@ -60,7 +66,7 @@ func runSeed(args []string) error {
 func runScan(args []string) error {
 	fs := flag.NewFlagSet("scan", flag.ExitOnError)
 	targetsPath := fs.String("targets", "fixtures/demo-domains.yaml", "path to targets YAML")
-	dbPath := fs.String("db", "tmp/certflow.json", "path to JSON database")
+	dbPath := fs.String("db", "tmp/certflow.db", "path to SQLite or JSON database")
 	name := fs.String("name", "cli-scan", "scan name")
 	insecure := fs.Bool("insecure-skip-verify", false, "skip TLS verification for local demos")
 	if err := fs.Parse(args); err != nil {
@@ -70,7 +76,12 @@ func runScan(args []string) error {
 	if err != nil {
 		return err
 	}
-	application := app.New(app.Config{Store: store.NewJSONStore(*dbPath), InsecureSkipVerify: *insecure})
+	st, closeStore, err := openStore(*dbPath)
+	if err != nil {
+		return err
+	}
+	defer closeStore()
+	application := app.New(app.Config{Store: st, InsecureSkipVerify: *insecure})
 	scan, err := application.RunScan(context.Background(), *name, targets)
 	if err != nil {
 		return err
@@ -80,13 +91,18 @@ func runScan(args []string) error {
 
 func runServe(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
-	dbPath := fs.String("db", "tmp/certflow.json", "path to JSON database")
+	dbPath := fs.String("db", "tmp/certflow.db", "path to SQLite or JSON database")
 	addr := fs.String("addr", "127.0.0.1:8080", "listen address")
 	insecure := fs.Bool("insecure-skip-verify", true, "skip TLS verification for local demo scans")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	application := app.New(app.Config{Store: store.NewJSONStore(*dbPath), InsecureSkipVerify: *insecure})
+	st, closeStore, err := openStore(*dbPath)
+	if err != nil {
+		return err
+	}
+	defer closeStore()
+	application := app.New(app.Config{Store: st, InsecureSkipVerify: *insecure})
 	server := httpapi.NewServer(application)
 	log.Printf("CertFlow AI listening on http://%s", *addr)
 	return http.ListenAndServe(*addr, server)
@@ -94,11 +110,16 @@ func runServe(args []string) error {
 
 func runRisks(args []string) error {
 	fs := flag.NewFlagSet("risks", flag.ExitOnError)
-	dbPath := fs.String("db", "tmp/certflow.json", "path to JSON database")
+	dbPath := fs.String("db", "tmp/certflow.db", "path to SQLite or JSON database")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	risks, err := app.New(app.Config{Store: store.NewJSONStore(*dbPath)}).ListRisks()
+	st, closeStore, err := openStore(*dbPath)
+	if err != nil {
+		return err
+	}
+	defer closeStore()
+	risks, err := app.New(app.Config{Store: st}).ListRisks()
 	if err != nil {
 		return err
 	}
@@ -107,7 +128,7 @@ func runRisks(args []string) error {
 
 func runReport(args []string) error {
 	fs := flag.NewFlagSet("report", flag.ExitOnError)
-	dbPath := fs.String("db", "tmp/certflow.json", "path to JSON database")
+	dbPath := fs.String("db", "tmp/certflow.db", "path to SQLite or JSON database")
 	certID := fs.String("certificate-id", "", "certificate ID")
 	outPath := fs.String("out", "", "optional markdown output path")
 	if err := fs.Parse(args); err != nil {
@@ -116,7 +137,12 @@ func runReport(args []string) error {
 	if strings.TrimSpace(*certID) == "" {
 		return fmt.Errorf("--certificate-id is required")
 	}
-	report, err := app.New(app.Config{Store: store.NewJSONStore(*dbPath)}).GenerateHandoffReport(*certID)
+	st, closeStore, err := openStore(*dbPath)
+	if err != nil {
+		return err
+	}
+	defer closeStore()
+	report, err := app.New(app.Config{Store: st}).GenerateHandoffReport(*certID)
 	if err != nil {
 		return err
 	}
@@ -221,15 +247,28 @@ func loadTargets(path string) ([]domain.Target, error) {
 	return targets, nil
 }
 
+func openStore(path string) (app.Store, func(), error) {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".db", ".sqlite", ".sqlite3":
+		st, err := store.NewSQLiteStore(path)
+		if err != nil {
+			return nil, func() {}, err
+		}
+		return st, func() { _ = st.Close() }, nil
+	default:
+		return store.NewJSONStore(path), func() {}, nil
+	}
+}
+
 func usage() {
 	fmt.Fprintf(os.Stderr, `CertFlow AI
 
 Usage:
-  certflow scan   --targets fixtures/demo-domains.yaml --db tmp/certflow.json
-  certflow seed   --db tmp/certflow.json
-  certflow serve  --db tmp/certflow.json --addr 127.0.0.1:8080
-  certflow risks  --db tmp/certflow.json
-  certflow report --db tmp/certflow.json --certificate-id cert_x --out handoff.md
+  certflow scan   --targets fixtures/demo-domains.yaml --db tmp/certflow.db
+  certflow seed   --db tmp/certflow.db
+  certflow serve  --db tmp/certflow.db --addr 127.0.0.1:8080
+  certflow risks  --db tmp/certflow.db
+  certflow report --db tmp/certflow.db --certificate-id cert_x --out handoff.md
 
 `)
 }

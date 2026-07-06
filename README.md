@@ -21,7 +21,7 @@ CertFlow AI turns those questions into scan data, risk findings, APIs, and hando
 - Go CLI and API server.
 - Concurrent TLS endpoint scanning.
 - X.509 metadata extraction with `crypto/tls` and `crypto/x509`.
-- JSON-backed persistence for scans, certificates, risks, and reports.
+- SQLite-backed persistence for scans, certificates, risks, and reports, with JSON file storage still available for lightweight demos.
 - Deterministic risk engine for expiration, missing ownership, and unknown renewal paths.
 - Evidence-backed handoff report generation.
 - Static landing page and dashboard served by the Go app.
@@ -37,7 +37,7 @@ go test ./...
 ```bash
 go run ./cmd/certflow scan \
   --targets fixtures/demo-domains.yaml \
-  --db tmp/certflow.json
+  --db tmp/certflow.db
 ```
 
 For local TLS demo services with self-signed certificates, add:
@@ -51,13 +51,19 @@ For local TLS demo services with self-signed certificates, add:
 If the local environment cannot reach public DNS/TLS endpoints, seed the dashboard with realistic demo inventory:
 
 ```bash
+go run ./cmd/certflow seed --db tmp/certflow.db
+```
+
+SQLite is the default backend for `.db`, `.sqlite`, and `.sqlite3` paths. A `.json` path uses the lightweight JSON store:
+
+```bash
 go run ./cmd/certflow seed --db tmp/certflow.json
 ```
 
 ## Start The Web App
 
 ```bash
-go run ./cmd/certflow serve --db tmp/certflow.json --addr 127.0.0.1:8080
+go run ./cmd/certflow serve --db tmp/certflow.db --addr 127.0.0.1:8080
 ```
 
 Then open:
@@ -108,11 +114,11 @@ curl -X POST http://127.0.0.1:8080/v1/ai/handoff-reports \
 ## CLI
 
 ```bash
-certflow scan   --targets fixtures/demo-domains.yaml --db tmp/certflow.json
-certflow seed   --db tmp/certflow.json
-certflow serve  --db tmp/certflow.json --addr 127.0.0.1:8080
-certflow risks  --db tmp/certflow.json
-certflow report --db tmp/certflow.json --certificate-id cert_x --out handoff.md
+certflow scan   --targets fixtures/demo-domains.yaml --db tmp/certflow.db
+certflow seed   --db tmp/certflow.db
+certflow serve  --db tmp/certflow.db --addr 127.0.0.1:8080
+certflow risks  --db tmp/certflow.db
+certflow report --db tmp/certflow.db --certificate-id cert_x --out handoff.md
 ```
 
 ## Architecture
@@ -126,12 +132,12 @@ Application Service
        |
 TLS Scanner ---- Risk Engine ---- Handoff Report Generator
        |
-JSON Store
+SQLite Store
 ```
 
 ## Roadmap
 
-- SQLite/Postgres persistence with migrations.
+- Postgres persistence with migrations.
 - OpenAPI document generation.
 - AWS ACM fixture importer.
 - GCP Certificate Manager fixture importer.
