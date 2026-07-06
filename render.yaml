@@ -9,3 +9,5 @@ services:
         value: /tmp/certflow.db
       - key: CERTFLOW_AI_PROVIDER
         value: local
+      - key: CERTFLOW_OTEL_STDOUT
+        value: "true"

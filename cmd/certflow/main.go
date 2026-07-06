@@ -17,6 +17,7 @@ import (
 	"github.com/satviktalchuru/certflow-ai/internal/domain"
 	"github.com/satviktalchuru/certflow-ai/internal/httpapi"
 	"github.com/satviktalchuru/certflow-ai/internal/importer"
+	"github.com/satviktalchuru/certflow-ai/internal/observability"
 	"github.com/satviktalchuru/certflow-ai/internal/report"
 	"github.com/satviktalchuru/certflow-ai/internal/store"
 )
@@ -63,7 +64,12 @@ func runSeed(args []string) error {
 		return err
 	}
 	defer closeStore()
-	if err := app.New(app.Config{Store: st, ReportGenerator: reportGeneratorFromEnv()}).SeedDemoData(); err != nil {
+	telemetry, shutdown, err := setupTelemetry()
+	if err != nil {
+		return err
+	}
+	defer shutdown(context.Background())
+	if err := app.New(app.Config{Store: st, ReportGenerator: reportGeneratorFromEnv(), Telemetry: telemetry}).SeedDemoData(); err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stdout, "Seeded demo certificate inventory at %s\n", *dbPath)
@@ -124,7 +130,12 @@ func runImport(args []string) error {
 		return err
 	}
 	defer closeStore()
-	if err := app.New(app.Config{Store: st, ReportGenerator: reportGeneratorFromEnv()}).ImportCertificates(*provider, certs); err != nil {
+	telemetry, shutdown, err := setupTelemetry()
+	if err != nil {
+		return err
+	}
+	defer shutdown(context.Background())
+	if err := app.New(app.Config{Store: st, ReportGenerator: reportGeneratorFromEnv(), Telemetry: telemetry}).ImportCertificates(*provider, certs); err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stdout, "Imported %d certificate(s) from %s into %s\n", len(certs), *provider, *dbPath)
@@ -149,7 +160,12 @@ func runScan(args []string) error {
 		return err
 	}
 	defer closeStore()
-	application := app.New(app.Config{Store: st, InsecureSkipVerify: *insecure, ReportGenerator: reportGeneratorFromEnv()})
+	telemetry, shutdown, err := setupTelemetry()
+	if err != nil {
+		return err
+	}
+	defer shutdown(context.Background())
+	application := app.New(app.Config{Store: st, InsecureSkipVerify: *insecure, ReportGenerator: reportGeneratorFromEnv(), Telemetry: telemetry})
 	scan, err := application.RunScan(context.Background(), *name, targets)
 	if err != nil {
 		return err
@@ -170,8 +186,13 @@ func runServe(args []string) error {
 		return err
 	}
 	defer closeStore()
-	application := app.New(app.Config{Store: st, InsecureSkipVerify: *insecure, ReportGenerator: reportGeneratorFromEnv()})
-	server := httpapi.NewServer(application)
+	telemetry, shutdown, err := setupTelemetry()
+	if err != nil {
+		return err
+	}
+	defer shutdown(context.Background())
+	application := app.New(app.Config{Store: st, InsecureSkipVerify: *insecure, ReportGenerator: reportGeneratorFromEnv(), Telemetry: telemetry})
+	server := httpapi.NewServerWithTelemetry(application, telemetry)
 	log.Printf("CertFlow AI listening on http://%s", *addr)
 	return http.ListenAndServe(*addr, server)
 }
@@ -187,7 +208,12 @@ func runRisks(args []string) error {
 		return err
 	}
 	defer closeStore()
-	risks, err := app.New(app.Config{Store: st, ReportGenerator: reportGeneratorFromEnv()}).ListRisks()
+	telemetry, shutdown, err := setupTelemetry()
+	if err != nil {
+		return err
+	}
+	defer shutdown(context.Background())
+	risks, err := app.New(app.Config{Store: st, ReportGenerator: reportGeneratorFromEnv(), Telemetry: telemetry}).ListRisks()
 	if err != nil {
 		return err
 	}
@@ -210,7 +236,12 @@ func runReport(args []string) error {
 		return err
 	}
 	defer closeStore()
-	report, err := app.New(app.Config{Store: st, ReportGenerator: reportGeneratorFromEnv()}).GenerateHandoffReport(*certID)
+	telemetry, shutdown, err := setupTelemetry()
+	if err != nil {
+		return err
+	}
+	defer shutdown(context.Background())
+	report, err := app.New(app.Config{Store: st, ReportGenerator: reportGeneratorFromEnv(), Telemetry: telemetry}).GenerateHandoffReport(*certID)
 	if err != nil {
 		return err
 	}
@@ -337,6 +368,14 @@ func reportGeneratorFromEnv() report.Generator {
 		}
 	}
 	return report.LocalGenerator{}
+}
+
+func setupTelemetry() (*observability.Telemetry, func(context.Context) error, error) {
+	stdout := strings.EqualFold(os.Getenv("CERTFLOW_OTEL_STDOUT"), "true")
+	return observability.Setup(context.Background(), observability.Config{
+		ServiceName: "certflow-ai",
+		Stdout:      stdout,
+	})
 }
 
 func writeTargets(path string, targets []domain.Target) error {

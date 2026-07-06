@@ -7,8 +7,11 @@ import (
 
 	"github.com/satviktalchuru/certflow-ai/internal/certscan"
 	"github.com/satviktalchuru/certflow-ai/internal/domain"
+	"github.com/satviktalchuru/certflow-ai/internal/observability"
 	"github.com/satviktalchuru/certflow-ai/internal/report"
 	"github.com/satviktalchuru/certflow-ai/internal/risk"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Store interface {
@@ -25,6 +28,7 @@ type Config struct {
 	Now                func() time.Time
 	InsecureSkipVerify bool
 	ReportGenerator    report.Generator
+	Telemetry          *observability.Telemetry
 }
 
 type App struct {
@@ -32,6 +36,7 @@ type App struct {
 	now                func() time.Time
 	insecureSkipVerify bool
 	reportGenerator    report.Generator
+	telemetry          *observability.Telemetry
 }
 
 func New(cfg Config) *App {
@@ -43,15 +48,22 @@ func New(cfg Config) *App {
 	if generator == nil {
 		generator = report.LocalGenerator{}
 	}
-	return &App{store: cfg.Store, now: now, insecureSkipVerify: cfg.InsecureSkipVerify, reportGenerator: generator}
+	return &App{store: cfg.Store, now: now, insecureSkipVerify: cfg.InsecureSkipVerify, reportGenerator: generator, telemetry: cfg.Telemetry}
 }
 
 func (a *App) RunScan(ctx context.Context, name string, targets []domain.Target) (domain.ScanRun, error) {
 	if a.store == nil {
 		return domain.ScanRun{}, fmt.Errorf("store is required")
 	}
+	ctx, span := a.startSpan(ctx, observability.SpanName("app", "run_scan"))
+	span.SetAttributes(attribute.String("certflow.scan.name", name), attribute.Int("certflow.scan.targets", len(targets)))
+	defer span.End()
+
 	started := a.now()
 	scanner := certscan.Scanner{Timeout: 5 * time.Second, MaxConcurrency: 20, InsecureSkipVerify: a.insecureSkipVerify}
+	if a.telemetry != nil {
+		scanner.Tracer = a.telemetry.Tracer
+	}
 	result := scanner.Scan(ctx, targets)
 
 	findings := make([]domain.RiskFinding, 0)
@@ -69,7 +81,14 @@ func (a *App) RunScan(ctx context.Context, name string, targets []domain.Target)
 		Risks:        findings,
 		Errors:       result.Errors,
 	}
-	return scan, a.store.SaveScan(scan)
+	if a.telemetry != nil {
+		_ = a.telemetry.RecordScanResult(ctx, "endpoint", len(targets), len(result.Errors), scan.CompletedAt.Sub(started).Seconds())
+	}
+	if err := a.store.SaveScan(scan); err != nil {
+		span.RecordError(err)
+		return domain.ScanRun{}, err
+	}
+	return scan, nil
 }
 
 func (a *App) ListCertificates() ([]domain.Certificate, error) {
@@ -89,8 +108,13 @@ func (a *App) ListScans() ([]domain.ScanRun, error) {
 }
 
 func (a *App) GenerateHandoffReport(certificateID string) (domain.HandoffReport, error) {
+	ctx, span := a.startSpan(context.Background(), observability.SpanName("app", "generate_handoff_report"))
+	span.SetAttributes(attribute.String("certflow.certificate_id", certificateID))
+	defer span.End()
+
 	certs, err := a.store.ListCertificates()
 	if err != nil {
+		span.RecordError(err)
 		return domain.HandoffReport{}, err
 	}
 	var cert domain.Certificate
@@ -103,11 +127,14 @@ func (a *App) GenerateHandoffReport(certificateID string) (domain.HandoffReport,
 		}
 	}
 	if !found {
-		return domain.HandoffReport{}, fmt.Errorf("certificate %q not found", certificateID)
+		err := fmt.Errorf("certificate %q not found", certificateID)
+		span.RecordError(err)
+		return domain.HandoffReport{}, err
 	}
 
 	allRisks, err := a.store.ListRisks()
 	if err != nil {
+		span.RecordError(err)
 		return domain.HandoffReport{}, err
 	}
 	riskTitles := make([]string, 0)
@@ -121,8 +148,9 @@ func (a *App) GenerateHandoffReport(certificateID string) (domain.HandoffReport,
 		}
 	}
 	now := a.now()
-	content, err := a.reportGenerator.Generate(context.Background(), report.Input{Certificate: cert, Risks: matchingRisks})
+	content, err := a.reportGenerator.Generate(ctx, report.Input{Certificate: cert, Risks: matchingRisks})
 	if err != nil {
+		span.RecordError(err)
 		return domain.HandoffReport{}, err
 	}
 	report := domain.HandoffReport{
@@ -137,9 +165,17 @@ func (a *App) GenerateHandoffReport(certificateID string) (domain.HandoffReport,
 		CreatedAt:        now,
 	}
 	if err := a.store.SaveReport(report); err != nil {
+		span.RecordError(err)
 		return domain.HandoffReport{}, err
 	}
 	return report, nil
+}
+
+func (a *App) startSpan(ctx context.Context, name string) (context.Context, trace.Span) {
+	if a.telemetry == nil || a.telemetry.Tracer == nil {
+		return trace.NewNoopTracerProvider().Tracer("certflow").Start(ctx, name)
+	}
+	return a.telemetry.Tracer.Start(ctx, name)
 }
 
 func (a *App) SeedDemoData() error {

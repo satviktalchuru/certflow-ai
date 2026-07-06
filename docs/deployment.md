@@ -38,6 +38,7 @@ Default environment:
 ```text
 CERTFLOW_DB=/tmp/certflow.db
 CERTFLOW_AI_PROVIDER=local
+CERTFLOW_OTEL_STDOUT=true
 ```
 
 For OpenAI-backed report generation, add:

@@ -1,27 +1,45 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
 
 	"github.com/satviktalchuru/certflow-ai/internal/app"
 	"github.com/satviktalchuru/certflow-ai/internal/domain"
+	"github.com/satviktalchuru/certflow-ai/internal/observability"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Server struct {
-	app    *app.App
-	static http.Handler
+	app       *app.App
+	static    http.Handler
+	telemetry *observability.Telemetry
 }
 
 func NewServer(app *app.App) *Server {
+	return NewServerWithTelemetry(app, nil)
+}
+
+func NewServerWithTelemetry(app *app.App, telemetry *observability.Telemetry) *Server {
 	return &Server{
-		app:    app,
-		static: http.FileServer(http.Dir("web/static")),
+		app:       app,
+		static:    http.FileServer(http.Dir("web/static")),
+		telemetry: telemetry,
 	}
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	ctx, span := s.startSpan(r, observability.SpanName("http", "request"))
+	span.SetAttributes(
+		attribute.String("http.request.method", r.Method),
+		attribute.String("url.path", r.URL.Path),
+	)
+	defer span.End()
+	r = r.WithContext(ctx)
+
 	switch {
 	case r.URL.Path == "/v1/healthz" && r.Method == http.MethodGet:
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -42,6 +60,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		s.static.ServeHTTP(w, r)
 	}
+}
+
+func (s *Server) startSpan(r *http.Request, name string) (context.Context, trace.Span) {
+	if s.telemetry == nil || s.telemetry.Tracer == nil {
+		return trace.NewNoopTracerProvider().Tracer("certflow").Start(r.Context(), name)
+	}
+	return s.telemetry.Tracer.Start(r.Context(), name)
 }
 
 func (s *Server) listCertificates(w http.ResponseWriter) {

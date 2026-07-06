@@ -11,12 +11,16 @@ import (
 	"time"
 
 	"github.com/satviktalchuru/certflow-ai/internal/domain"
+	"github.com/satviktalchuru/certflow-ai/internal/observability"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type Scanner struct {
 	Timeout            time.Duration
 	MaxConcurrency     int
 	InsecureSkipVerify bool
+	Tracer             trace.Tracer
 }
 
 type Result struct {
@@ -25,6 +29,10 @@ type Result struct {
 }
 
 func (s Scanner) Scan(ctx context.Context, targets []domain.Target) Result {
+	ctx, span := s.startSpan(ctx, observability.SpanName("scanner", "scan"))
+	span.SetAttributes(attribute.Int("certflow.scan.targets", len(targets)))
+	defer span.End()
+
 	timeout := s.Timeout
 	if timeout == 0 {
 		timeout = 5 * time.Second
@@ -72,6 +80,10 @@ func (s Scanner) Scan(ctx context.Context, targets []domain.Target) Result {
 		}
 		out.Certificates = append(out.Certificates, result.cert)
 	}
+	span.SetAttributes(
+		attribute.Int("certflow.scan.certificates", len(out.Certificates)),
+		attribute.Int("certflow.scan.errors", len(out.Errors)),
+	)
 	return out
 }
 
@@ -82,6 +94,14 @@ type scanOneResult struct {
 }
 
 func (s Scanner) scanOne(ctx context.Context, timeout time.Duration, target domain.Target) scanOneResult {
+	ctx, span := s.startSpan(ctx, observability.SpanName("scanner", "target"))
+	span.SetAttributes(
+		attribute.String("certflow.target.host", target.Host),
+		attribute.Int("certflow.target.port", target.Port),
+		attribute.String("certflow.service_id", target.ServiceID),
+	)
+	defer span.End()
+
 	dialer := &tls.Dialer{
 		NetDialer: &net.Dialer{Timeout: timeout},
 		Config: &tls.Config{
@@ -95,6 +115,7 @@ func (s Scanner) scanOne(ctx context.Context, timeout time.Duration, target doma
 
 	conn, err := dialer.DialContext(scanCtx, "tcp", address(target))
 	if err != nil {
+		span.RecordError(err)
 		return scanOneResult{target: target, err: err}
 	}
 	defer conn.Close()
@@ -102,6 +123,7 @@ func (s Scanner) scanOne(ctx context.Context, timeout time.Duration, target doma
 	tlsConn := conn.(*tls.Conn)
 	state := tlsConn.ConnectionState()
 	if len(state.PeerCertificates) == 0 {
+		span.RecordError(ErrNoPeerCertificate)
 		return scanOneResult{target: target, err: ErrNoPeerCertificate}
 	}
 	leaf := state.PeerCertificates[0]
@@ -134,6 +156,13 @@ func (s Scanner) scanOne(ctx context.Context, timeout time.Duration, target doma
 	}
 
 	return scanOneResult{target: target, cert: cert}
+}
+
+func (s Scanner) startSpan(ctx context.Context, name string) (context.Context, trace.Span) {
+	if s.Tracer == nil {
+		return trace.NewNoopTracerProvider().Tracer("certflow").Start(ctx, name)
+	}
+	return s.Tracer.Start(ctx, name)
 }
 
 func address(target domain.Target) string {

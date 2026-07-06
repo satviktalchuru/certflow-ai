@@ -16,6 +16,7 @@ COPY fixtures /app/fixtures
 USER certflow
 
 ENV CERTFLOW_DB=/tmp/certflow.db
+ENV CERTFLOW_OTEL_STDOUT=false
 ENV PORT=8080
 EXPOSE 8080
 

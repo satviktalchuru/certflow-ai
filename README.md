@@ -24,6 +24,7 @@ CertFlow AI turns those questions into scan data, risk findings, APIs, and hando
 - SQLite-backed persistence for scans, certificates, risks, and reports, with JSON file storage still available for lightweight demos.
 - Deterministic risk engine for expiration, missing ownership, and unknown renewal paths.
 - Evidence-backed handoff report generation with a local deterministic generator by default and optional OpenAI structured-output generation.
+- OpenTelemetry traces and scan metrics for backend operations.
 - Static landing page and dashboard served by the Go app.
 
 ## Run Tests
@@ -154,6 +155,27 @@ Optional:
 export OPENAI_RESPONSES_ENDPOINT=https://api.openai.com/v1/responses
 ```
 
+## OpenTelemetry
+
+CertFlow instruments the Go backend with OpenTelemetry.
+
+Enable local stdout telemetry:
+
+```bash
+export CERTFLOW_OTEL_STDOUT=true
+go run ./cmd/certflow serve --db tmp/certflow.db --addr 127.0.0.1:8080
+```
+
+Current instrumentation:
+
+- HTTP request spans for API and dashboard requests.
+- App spans for scan execution and handoff report generation.
+- Scanner spans for full scan runs and individual TLS targets.
+- Metrics:
+  - `certflow_scan_targets_total`
+  - `certflow_scan_failures_total`
+  - `certflow_scan_duration_seconds`
+
 Example scan request:
 
 ```bash
@@ -211,5 +233,4 @@ SQLite Store
 ## Roadmap
 
 - Postgres persistence with migrations.
-- OpenTelemetry traces and metrics.
 - Provider-backed structured AI report generation.
