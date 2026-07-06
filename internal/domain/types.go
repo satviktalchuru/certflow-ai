@@ -44,7 +44,7 @@ func itoa(n int) string {
 }
 
 type Certificate struct {
-	ID                 string            `json:"id"`
+	ID                string            `json:"id"`
 	FingerprintSHA256 string            `json:"fingerprint_sha256"`
 	SerialNumber      string            `json:"serial_number"`
 	SubjectCommonName string            `json:"subject_common_name,omitempty"`
@@ -94,13 +94,13 @@ type ScanError struct {
 }
 
 type HandoffReport struct {
-	ID              string    `json:"id"`
-	ServiceID       string    `json:"service_id,omitempty"`
-	CertificateID   string    `json:"certificate_id,omitempty"`
-	Summary         string    `json:"summary"`
-	Risks           []string  `json:"risks"`
-	HandoffChecklist []string `json:"handoff_checklist"`
-	RenewalSteps    []string  `json:"renewal_steps"`
-	EvidenceIDs     []string  `json:"evidence_ids"`
-	CreatedAt       time.Time `json:"created_at"`
+	ID               string    `json:"id"`
+	ServiceID        string    `json:"service_id,omitempty"`
+	CertificateID    string    `json:"certificate_id,omitempty"`
+	Summary          string    `json:"summary"`
+	Risks            []string  `json:"risks"`
+	HandoffChecklist []string  `json:"handoff_checklist"`
+	RenewalSteps     []string  `json:"renewal_steps"`
+	EvidenceIDs      []string  `json:"evidence_ids"`
+	CreatedAt        time.Time `json:"created_at"`
 }

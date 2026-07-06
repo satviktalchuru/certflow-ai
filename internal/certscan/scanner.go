@@ -109,7 +109,7 @@ func (s Scanner) scanOne(ctx context.Context, timeout time.Duration, target doma
 	now := time.Now().UTC()
 
 	cert := domain.Certificate{
-		ID:                 "cert_" + hex.EncodeToString(sum[:8]),
+		ID:                "cert_" + hex.EncodeToString(sum[:8]),
 		FingerprintSHA256: "sha256:" + hex.EncodeToString(sum[:]),
 		SerialNumber:      leaf.SerialNumber.String(),
 		SubjectCommonName: leaf.Subject.CommonName,

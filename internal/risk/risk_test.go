@@ -10,13 +10,13 @@ import (
 func TestEvaluateFlagsCriticalProductionCertificateExpiringSoon(t *testing.T) {
 	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
 	cert := domain.Certificate{
-		ID:        "cert_1",
-		NotAfter:  now.Add(9 * 24 * time.Hour),
-		DNSNames:  []string{"api.example.com"},
-		Source:    "endpoint",
-		Endpoint:  "api.example.com:443",
-		OwnerTeam: "platform-sre",
-		ServiceID: "svc-api",
+		ID:            "cert_1",
+		NotAfter:      now.Add(9 * 24 * time.Hour),
+		DNSNames:      []string{"api.example.com"},
+		Source:        "endpoint",
+		Endpoint:      "api.example.com:443",
+		OwnerTeam:     "platform-sre",
+		ServiceID:     "svc-api",
 		RenewalMethod: "acme",
 	}
 

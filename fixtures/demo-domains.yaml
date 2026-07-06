@@ -1,0 +1,13 @@
+targets:
+  - host: example.com
+    port: 443
+    service_id: svc-marketing
+    environment: prod
+    owner_team: web-platform
+    renewal_method: acme
+  - host: github.com
+    port: 443
+    service_id: svc-code-hosting
+    environment: prod
+    owner_team: developer-platform
+    renewal_method: managed

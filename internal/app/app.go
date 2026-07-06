@@ -139,6 +139,87 @@ func (a *App) GenerateHandoffReport(certificateID string) (domain.HandoffReport,
 	return report, nil
 }
 
+func (a *App) SeedDemoData() error {
+	if a.store == nil {
+		return fmt.Errorf("store is required")
+	}
+	now := a.now()
+	certs := []domain.Certificate{
+		{
+			ID:                "cert_demo_api",
+			FingerprintSHA256: "sha256:8c8e2f2c4b6a8f01",
+			SerialNumber:      "1001",
+			SubjectCommonName: "api.certflow.demo",
+			IssuerCommonName:  "Demo Intermediate CA",
+			NotBefore:         now.Add(-80 * 24 * time.Hour),
+			NotAfter:          now.Add(9 * 24 * time.Hour),
+			DNSNames:          []string{"api.certflow.demo"},
+			PublicKeyAlg:      "RSA",
+			SignatureAlg:      "SHA256-RSA",
+			Source:            "demo",
+			Endpoint:          "api.certflow.demo:443",
+			ServiceID:         "svc-api",
+			Environment:       "prod",
+			OwnerTeam:         "platform-sre",
+			RenewalMethod:     "acme",
+			FirstSeenAt:       now,
+			LastSeenAt:        now,
+		},
+		{
+			ID:                "cert_demo_admin",
+			FingerprintSHA256: "sha256:4c155eed0f91a830",
+			SerialNumber:      "1002",
+			SubjectCommonName: "admin.certflow.demo",
+			IssuerCommonName:  "Demo Intermediate CA",
+			NotBefore:         now.Add(-20 * 24 * time.Hour),
+			NotAfter:          now.Add(95 * 24 * time.Hour),
+			DNSNames:          []string{"admin.certflow.demo"},
+			PublicKeyAlg:      "ECDSA",
+			SignatureAlg:      "ECDSA-SHA256",
+			Source:            "demo",
+			Endpoint:          "admin.certflow.demo:443",
+			ServiceID:         "svc-admin",
+			Environment:       "prod",
+			FirstSeenAt:       now,
+			LastSeenAt:        now,
+		},
+		{
+			ID:                "cert_demo_docs",
+			FingerprintSHA256: "sha256:e2b832aa0a91d114",
+			SerialNumber:      "1003",
+			SubjectCommonName: "docs.certflow.demo",
+			IssuerCommonName:  "Managed Demo CA",
+			NotBefore:         now.Add(-10 * 24 * time.Hour),
+			NotAfter:          now.Add(180 * 24 * time.Hour),
+			DNSNames:          []string{"docs.certflow.demo"},
+			PublicKeyAlg:      "ECDSA",
+			SignatureAlg:      "ECDSA-SHA256",
+			Source:            "demo",
+			Endpoint:          "docs.certflow.demo:443",
+			ServiceID:         "svc-docs",
+			Environment:       "prod",
+			OwnerTeam:         "developer-platform",
+			RenewalMethod:     "managed",
+			FirstSeenAt:       now,
+			LastSeenAt:        now,
+		},
+	}
+
+	findings := make([]domain.RiskFinding, 0)
+	for _, cert := range certs {
+		findings = append(findings, risk.Evaluate(now, cert)...)
+	}
+	scan := domain.ScanRun{
+		ID:           "scan_demo_seed",
+		Name:         "offline-demo-seed",
+		StartedAt:    now,
+		CompletedAt:  now,
+		Certificates: certs,
+		Risks:        findings,
+	}
+	return a.store.SaveScan(scan)
+}
+
 func handoffSummary(cert domain.Certificate, risks []string) string {
 	owner := cert.OwnerTeam
 	if strings.TrimSpace(owner) == "" {

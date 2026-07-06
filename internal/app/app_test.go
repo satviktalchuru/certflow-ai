@@ -82,3 +82,29 @@ func TestGenerateHandoffReportUsesStoredRiskEvidence(t *testing.T) {
 		t.Fatal("expected summary")
 	}
 }
+
+func TestSeedDemoDataCreatesOfflineDashboardInventory(t *testing.T) {
+	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	app := New(Config{
+		Store: store.NewJSONStore(filepath.Join(t.TempDir(), "certflow.json")),
+		Now:   func() time.Time { return now },
+	})
+
+	if err := app.SeedDemoData(); err != nil {
+		t.Fatalf("seed demo data: %v", err)
+	}
+	certs, err := app.ListCertificates()
+	if err != nil {
+		t.Fatalf("list certs: %v", err)
+	}
+	if len(certs) != 3 {
+		t.Fatalf("expected 3 demo certs, got %d", len(certs))
+	}
+	risks, err := app.ListRisks()
+	if err != nil {
+		t.Fatalf("list risks: %v", err)
+	}
+	if len(risks) == 0 {
+		t.Fatal("expected demo risks")
+	}
+}

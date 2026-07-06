@@ -1,0 +1,235 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"strconv"
+	"strings"
+
+	"github.com/satviktalchuru/certflow-ai/internal/app"
+	"github.com/satviktalchuru/certflow-ai/internal/domain"
+	"github.com/satviktalchuru/certflow-ai/internal/httpapi"
+	"github.com/satviktalchuru/certflow-ai/internal/store"
+)
+
+func main() {
+	if len(os.Args) < 2 {
+		usage()
+		os.Exit(2)
+	}
+
+	var err error
+	switch os.Args[1] {
+	case "scan":
+		err = runScan(os.Args[2:])
+	case "seed":
+		err = runSeed(os.Args[2:])
+	case "serve":
+		err = runServe(os.Args[2:])
+	case "risks":
+		err = runRisks(os.Args[2:])
+	case "report":
+		err = runReport(os.Args[2:])
+	default:
+		usage()
+		os.Exit(2)
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func runSeed(args []string) error {
+	fs := flag.NewFlagSet("seed", flag.ExitOnError)
+	dbPath := fs.String("db", "tmp/certflow.json", "path to JSON database")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if err := app.New(app.Config{Store: store.NewJSONStore(*dbPath)}).SeedDemoData(); err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stdout, "Seeded demo certificate inventory at %s\n", *dbPath)
+	return nil
+}
+
+func runScan(args []string) error {
+	fs := flag.NewFlagSet("scan", flag.ExitOnError)
+	targetsPath := fs.String("targets", "fixtures/demo-domains.yaml", "path to targets YAML")
+	dbPath := fs.String("db", "tmp/certflow.json", "path to JSON database")
+	name := fs.String("name", "cli-scan", "scan name")
+	insecure := fs.Bool("insecure-skip-verify", false, "skip TLS verification for local demos")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	targets, err := loadTargets(*targetsPath)
+	if err != nil {
+		return err
+	}
+	application := app.New(app.Config{Store: store.NewJSONStore(*dbPath), InsecureSkipVerify: *insecure})
+	scan, err := application.RunScan(context.Background(), *name, targets)
+	if err != nil {
+		return err
+	}
+	return json.NewEncoder(os.Stdout).Encode(scan)
+}
+
+func runServe(args []string) error {
+	fs := flag.NewFlagSet("serve", flag.ExitOnError)
+	dbPath := fs.String("db", "tmp/certflow.json", "path to JSON database")
+	addr := fs.String("addr", "127.0.0.1:8080", "listen address")
+	insecure := fs.Bool("insecure-skip-verify", true, "skip TLS verification for local demo scans")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	application := app.New(app.Config{Store: store.NewJSONStore(*dbPath), InsecureSkipVerify: *insecure})
+	server := httpapi.NewServer(application)
+	log.Printf("CertFlow AI listening on http://%s", *addr)
+	return http.ListenAndServe(*addr, server)
+}
+
+func runRisks(args []string) error {
+	fs := flag.NewFlagSet("risks", flag.ExitOnError)
+	dbPath := fs.String("db", "tmp/certflow.json", "path to JSON database")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	risks, err := app.New(app.Config{Store: store.NewJSONStore(*dbPath)}).ListRisks()
+	if err != nil {
+		return err
+	}
+	return json.NewEncoder(os.Stdout).Encode(risks)
+}
+
+func runReport(args []string) error {
+	fs := flag.NewFlagSet("report", flag.ExitOnError)
+	dbPath := fs.String("db", "tmp/certflow.json", "path to JSON database")
+	certID := fs.String("certificate-id", "", "certificate ID")
+	outPath := fs.String("out", "", "optional markdown output path")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if strings.TrimSpace(*certID) == "" {
+		return fmt.Errorf("--certificate-id is required")
+	}
+	report, err := app.New(app.Config{Store: store.NewJSONStore(*dbPath)}).GenerateHandoffReport(*certID)
+	if err != nil {
+		return err
+	}
+	markdown := reportMarkdown(report)
+	if *outPath == "" {
+		fmt.Print(markdown)
+		return nil
+	}
+	return os.WriteFile(*outPath, []byte(markdown), 0o644)
+}
+
+func reportMarkdown(report domain.HandoffReport) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# CertFlow Handoff Report\n\n")
+	fmt.Fprintf(&b, "- Report ID: `%s`\n", report.ID)
+	fmt.Fprintf(&b, "- Certificate ID: `%s`\n", report.CertificateID)
+	if report.ServiceID != "" {
+		fmt.Fprintf(&b, "- Service ID: `%s`\n", report.ServiceID)
+	}
+	fmt.Fprintf(&b, "\n## Summary\n\n%s\n\n", report.Summary)
+	fmt.Fprintf(&b, "## Risks\n\n")
+	writeList(&b, report.Risks)
+	fmt.Fprintf(&b, "\n## Handoff Checklist\n\n")
+	writeList(&b, report.HandoffChecklist)
+	fmt.Fprintf(&b, "\n## Renewal Steps\n\n")
+	writeList(&b, report.RenewalSteps)
+	fmt.Fprintf(&b, "\n## Evidence IDs\n\n")
+	writeList(&b, report.EvidenceIDs)
+	return b.String()
+}
+
+func writeList(b *strings.Builder, values []string) {
+	if len(values) == 0 {
+		b.WriteString("- None\n")
+		return
+	}
+	for _, value := range values {
+		fmt.Fprintf(b, "- %s\n", value)
+	}
+}
+
+func loadTargets(path string) ([]domain.Target, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(string(b), "\n")
+	targets := make([]domain.Target, 0)
+	current := domain.Target{}
+	inTarget := false
+
+	flush := func() {
+		if inTarget && current.Host != "" {
+			targets = append(targets, current)
+		}
+		current = domain.Target{}
+		inTarget = false
+	}
+
+	for _, raw := range lines {
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "#") || line == "targets:" {
+			continue
+		}
+		if strings.HasPrefix(line, "- ") {
+			flush()
+			inTarget = true
+			line = strings.TrimSpace(strings.TrimPrefix(line, "- "))
+			if line == "" {
+				continue
+			}
+		}
+		key, value, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		value = strings.Trim(strings.TrimSpace(value), `"'`)
+		switch key {
+		case "host":
+			current.Host = value
+		case "port":
+			port, err := strconv.Atoi(value)
+			if err != nil {
+				return nil, fmt.Errorf("invalid port %q", value)
+			}
+			current.Port = port
+		case "service_id":
+			current.ServiceID = value
+		case "environment":
+			current.Environment = value
+		case "owner_team":
+			current.OwnerTeam = value
+		case "renewal_method":
+			current.RenewalMethod = value
+		}
+	}
+	flush()
+	if len(targets) == 0 {
+		return nil, fmt.Errorf("no targets found in %s", path)
+	}
+	return targets, nil
+}
+
+func usage() {
+	fmt.Fprintf(os.Stderr, `CertFlow AI
+
+Usage:
+  certflow scan   --targets fixtures/demo-domains.yaml --db tmp/certflow.json
+  certflow seed   --db tmp/certflow.json
+  certflow serve  --db tmp/certflow.json --addr 127.0.0.1:8080
+  certflow risks  --db tmp/certflow.json
+  certflow report --db tmp/certflow.json --certificate-id cert_x --out handoff.md
+
+`)
+}

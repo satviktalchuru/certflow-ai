@@ -14,7 +14,7 @@ func TestJSONStorePersistsCertificatesRisksScansAndReports(t *testing.T) {
 	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
 
 	cert := domain.Certificate{
-		ID:                 "cert_1",
+		ID:                "cert_1",
 		FingerprintSHA256: "sha256:abc",
 		SerialNumber:      "123",
 		NotAfter:          now.Add(24 * time.Hour),

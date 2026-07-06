@@ -16,25 +16,25 @@ func Evaluate(now time.Time, cert domain.Certificate) []domain.RiskFinding {
 		findings = append(findings, finding(now, cert, domain.SeverityCritical, "expiration",
 			fmt.Sprintf("Certificate expires in %d days", days),
 			map[string]interface{}{
-				"not_after":       cert.NotAfter,
+				"not_after":      cert.NotAfter,
 				"days_remaining": days,
-				"endpoint":        cert.Endpoint,
+				"endpoint":       cert.Endpoint,
 			}))
 	} else if days <= 30 {
 		findings = append(findings, finding(now, cert, domain.SeverityHigh, "expiration",
 			fmt.Sprintf("Certificate expires in %d days", days),
 			map[string]interface{}{
-				"not_after":       cert.NotAfter,
+				"not_after":      cert.NotAfter,
 				"days_remaining": days,
-				"endpoint":        cert.Endpoint,
+				"endpoint":       cert.Endpoint,
 			}))
 	} else if days <= 60 {
 		findings = append(findings, finding(now, cert, domain.SeverityMedium, "expiration",
 			fmt.Sprintf("Certificate expires in %d days", days),
 			map[string]interface{}{
-				"not_after":       cert.NotAfter,
+				"not_after":      cert.NotAfter,
 				"days_remaining": days,
-				"endpoint":        cert.Endpoint,
+				"endpoint":       cert.Endpoint,
 			}))
 	}
 

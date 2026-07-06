@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CertFlow AI</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="mark">CF</span>
+        <span>CertFlow AI</span>
+      </div>
+      <nav>
+        <a href="#dashboard">Dashboard</a>
+        <a href="#api">API</a>
+        <a href="#architecture">Architecture</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Certificate reliability for SRE teams</p>
+          <h1>Make certificate handoffs boring before they become outages.</h1>
+          <p>
+            CertFlow AI scans TLS endpoints, tracks ownership and renewal risk,
+            and generates evidence-backed handoff reports from a Go backend.
+          </p>
+          <div class="actions">
+            <a class="button primary" href="#dashboard">Launch Demo</a>
+            <a class="button secondary" href="#api">View API</a>
+          </div>
+        </div>
+        <div class="terminal" aria-label="CLI example">
+          <div class="terminal-header">
+            <span></span><span></span><span></span>
+          </div>
+          <pre><code>$ certflow scan --targets fixtures/demo-domains.yaml
+{ "certificates": 2, "risks": 1, "errors": 0 }
+
+$ certflow report --certificate-id cert_8cf2
+# CertFlow Handoff Report</code></pre>
+        </div>
+      </section>
+
+      <section id="dashboard" class="section">
+        <div class="section-heading">
+          <p class="eyebrow">Live backend data</p>
+          <h2>Operational Dashboard</h2>
+        </div>
+        <div class="metrics">
+          <div class="metric">
+            <span id="cert-count">0</span>
+            <label>Certificates</label>
+          </div>
+          <div class="metric">
+            <span id="risk-count">0</span>
+            <label>Open Risks</label>
+          </div>
+          <div class="metric">
+            <span id="critical-count">0</span>
+            <label>Critical</label>
+          </div>
+        </div>
+
+        <div class="grid">
+          <section class="panel">
+            <div class="panel-heading">
+              <h3>Certificate Inventory</h3>
+              <button id="refresh" type="button">Refresh</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Endpoint</th>
+                    <th>Owner</th>
+                    <th>Expires</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="cert-table"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel">
+            <h3>Risk Queue</h3>
+            <div id="risk-list" class="risk-list"></div>
+          </section>
+        </div>
+
+        <section class="panel report-panel">
+          <h3>Generated Handoff Report</h3>
+          <pre id="report-output">Select a certificate and generate a report.</pre>
+        </section>
+      </section>
+
+      <section id="api" class="section split">
+        <div>
+          <p class="eyebrow">Backend-first</p>
+          <h2>Production-style API surface</h2>
+          <p>
+            The UI is intentionally thin. All parsing, persistence, risk scoring,
+            and report generation lives behind the Go API and CLI.
+          </p>
+        </div>
+        <pre class="code"><code>GET  /v1/healthz
+GET  /v1/certificates
+GET  /v1/risks
+GET  /v1/scans
+POST /v1/scans
+POST /v1/ai/handoff-reports</code></pre>
+      </section>
+
+      <section id="architecture" class="section bands">
+        <div>
+          <h3>Go Scanner</h3>
+          <p>Concurrent TLS handshakes, x509 parsing, SHA-256 fingerprints.</p>
+        </div>
+        <div>
+          <h3>Risk Engine</h3>
+          <p>Deterministic findings before AI summarizes anything.</p>
+        </div>
+        <div>
+          <h3>Handoff Reports</h3>
+          <p>Evidence-linked renewal steps and ownership checklists.</p>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
