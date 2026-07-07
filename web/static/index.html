@@ -13,7 +13,10 @@
         <span>CertFlow AI</span>
       </div>
       <nav>
-        <a href="#dashboard">Dashboard</a>
+        <a href="/app">Dashboard</a>
+        <a href="/app/certificates">Certificates</a>
+        <a href="/app/risks">Risks</a>
+        <a href="/app/reports">Reports</a>
         <a href="#api">API</a>
         <a href="#architecture">Architecture</a>
       </nav>
@@ -29,7 +32,7 @@
             and generates evidence-backed handoff reports from a Go backend.
           </p>
           <div class="actions">
-            <a class="button primary" href="#dashboard">Launch Demo</a>
+            <a class="button primary" href="/app">Launch Demo</a>
             <a class="button secondary" href="/v1/openapi.json">View OpenAPI</a>
           </div>
         </div>
@@ -45,12 +48,18 @@ $ certflow report --certificate-id cert_8cf2
         </div>
       </section>
 
-      <section id="dashboard" class="section">
+      <section id="dashboard" class="section app-shell">
         <div class="section-heading">
           <p class="eyebrow">Live backend data</p>
-          <h2>Operational Dashboard</h2>
+          <h2 id="view-title">Operational Dashboard</h2>
+          <div class="tabs">
+            <a data-route="/app" href="/app">Overview</a>
+            <a data-route="/app/certificates" href="/app/certificates">Certificates</a>
+            <a data-route="/app/risks" href="/app/risks">Risks</a>
+            <a data-route="/app/reports" href="/app/reports">Reports</a>
+          </div>
         </div>
-        <div class="metrics">
+        <div class="metrics" data-view="overview certificates risks reports">
           <div class="metric">
             <span id="cert-count">0</span>
             <label>Certificates</label>
@@ -65,7 +74,7 @@ $ certflow report --certificate-id cert_8cf2
           </div>
         </div>
 
-        <div class="grid">
+        <div class="grid" data-view="overview certificates risks">
           <section class="panel">
             <div class="panel-heading">
               <h3>Certificate Inventory</h3>
@@ -86,13 +95,13 @@ $ certflow report --certificate-id cert_8cf2
             </div>
           </section>
 
-          <section class="panel">
+          <section class="panel" data-view="overview risks">
             <h3>Risk Queue</h3>
             <div id="risk-list" class="risk-list"></div>
           </section>
         </div>
 
-        <section class="panel report-panel">
+        <section class="panel report-panel" data-view="overview reports">
           <h3>Generated Handoff Report</h3>
           <pre id="report-output">Select a certificate and generate a report.</pre>
         </section>

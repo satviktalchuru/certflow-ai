@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/satviktalchuru/certflow-ai/internal/app"
@@ -16,6 +18,7 @@ import (
 type Server struct {
 	app       *app.App
 	static    http.Handler
+	staticDir string
 	telemetry *observability.Telemetry
 }
 
@@ -26,7 +29,8 @@ func NewServer(app *app.App) *Server {
 func NewServerWithTelemetry(app *app.App, telemetry *observability.Telemetry) *Server {
 	return &Server{
 		app:       app,
-		static:    http.FileServer(http.Dir("web/static")),
+		staticDir: staticDir(),
+		static:    http.FileServer(http.Dir(staticDir())),
 		telemetry: telemetry,
 	}
 }
@@ -58,8 +62,33 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(r.URL.Path, "/v1/"):
 		writeError(w, http.StatusNotFound, "endpoint not found")
 	default:
-		s.static.ServeHTTP(w, r)
+		s.serveStatic(w, r)
 	}
+}
+
+func (s *Server) serveStatic(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/" {
+		s.static.ServeHTTP(w, r)
+		return
+	}
+	cleanPath := filepath.Clean(strings.TrimPrefix(r.URL.Path, "/"))
+	if cleanPath != "." {
+		if _, err := os.Stat(filepath.Join(s.staticDir, cleanPath)); err == nil {
+			s.static.ServeHTTP(w, r)
+			return
+		}
+	}
+	http.ServeFile(w, r, filepath.Join(s.staticDir, "index.html"))
+}
+
+func staticDir() string {
+	candidates := []string{"web/static", "../../web/static"}
+	for _, candidate := range candidates {
+		if _, err := os.Stat(filepath.Join(candidate, "index.html")); err == nil {
+			return candidate
+		}
+	}
+	return "web/static"
 }
 
 func (s *Server) startSpan(r *http.Request, name string) (context.Context, trace.Span) {

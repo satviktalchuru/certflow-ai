@@ -120,6 +120,15 @@ Then open:
 http://127.0.0.1:8080
 ```
 
+App routes:
+
+```text
+/app
+/app/certificates
+/app/risks
+/app/reports
+```
+
 ## Deploy
 
 CertFlow includes Docker and Render deployment packaging:

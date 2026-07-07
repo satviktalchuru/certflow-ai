@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -87,5 +88,21 @@ func TestServerExposesOpenAPISpec(t *testing.T) {
 		if _, ok := paths[path]; !ok {
 			t.Fatalf("expected path %s in OpenAPI spec", path)
 		}
+	}
+}
+
+func TestServerServesAppRoutesFromStaticShell(t *testing.T) {
+	now := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	st := store.NewJSONStore(filepath.Join(t.TempDir(), "certflow.json"))
+	server := NewServer(app.New(app.Config{Store: st, Now: func() time.Time { return now }}))
+
+	resp := httptest.NewRecorder()
+	server.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/app/certificates", nil))
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.Code)
+	}
+	if !strings.Contains(resp.Body.String(), "CertFlow AI") {
+		t.Fatalf("expected app shell, got %s", resp.Body.String())
 	}
 }

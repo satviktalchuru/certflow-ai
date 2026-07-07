@@ -5,6 +5,11 @@ const certCount = document.querySelector("#cert-count");
 const riskCount = document.querySelector("#risk-count");
 const criticalCount = document.querySelector("#critical-count");
 const refreshButton = document.querySelector("#refresh");
+const viewTitle = document.querySelector("#view-title");
+const routedSections = document.querySelectorAll("[data-view]");
+const routeLinks = document.querySelectorAll("[data-route]");
+
+let latestReports = [];
 
 async function fetchJSON(path, options) {
   const response = await fetch(path, options);
@@ -60,6 +65,7 @@ function renderRisks(risks) {
 }
 
 function renderReport(report) {
+  latestReports = [report, ...latestReports.filter((item) => item.id !== report.id)].slice(0, 5);
   reportOutput.textContent = `# CertFlow Handoff Report
 
 Report ID: ${report.id}
@@ -81,6 +87,36 @@ ${(report.renewal_steps || []).map((item) => `- ${item}`).join("\n")}
 ${(report.evidence_ids || []).map((item) => `- ${item}`).join("\n")}`;
 }
 
+function routeName() {
+  const path = window.location.pathname;
+  if (path === "/app/certificates") return "certificates";
+  if (path === "/app/risks") return "risks";
+  if (path === "/app/reports") return "reports";
+  if (path.startsWith("/app")) return "overview";
+  return "overview";
+}
+
+function applyRoute() {
+  const view = routeName();
+  const titles = {
+    overview: "Operational Dashboard",
+    certificates: "Certificate Inventory",
+    risks: "Risk Queue",
+    reports: "Handoff Reports",
+  };
+  viewTitle.textContent = titles[view];
+  for (const section of routedSections) {
+    const views = section.dataset.view.split(" ");
+    section.hidden = !views.includes(view);
+  }
+  for (const link of routeLinks) {
+    link.classList.toggle("active", link.dataset.route === window.location.pathname);
+  }
+  if (view === "reports" && latestReports.length === 0) {
+    reportOutput.textContent = "Generate a report from the certificate inventory to see it here.";
+  }
+}
+
 async function loadDashboard() {
   try {
     const [certs, risks] = await Promise.all([
@@ -89,10 +125,21 @@ async function loadDashboard() {
     ]);
     renderCertificates(certs);
     renderRisks(risks);
+    applyRoute();
   } catch (error) {
     reportOutput.textContent = `Unable to load backend data: ${error.message}`;
   }
 }
+
+document.addEventListener("click", (event) => {
+  const link = event.target.closest("a[data-route]");
+  if (!link) return;
+  event.preventDefault();
+  history.pushState({}, "", link.href);
+  applyRoute();
+});
+
+window.addEventListener("popstate", applyRoute);
 
 certTable.addEventListener("click", async (event) => {
   const button = event.target.closest("button[data-cert]");
@@ -105,6 +152,7 @@ certTable.addEventListener("click", async (event) => {
       body: JSON.stringify({certificate_id: button.dataset.cert}),
     });
     renderReport(report);
+    history.pushState({}, "", "/app/reports");
     await loadDashboard();
   } catch (error) {
     reportOutput.textContent = `Report generation failed: ${error.message}`;
