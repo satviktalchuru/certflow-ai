@@ -36,7 +36,7 @@ The repository includes `render.yaml` for Render Blueprint deployment.
 Default environment:
 
 ```text
-CERTFLOW_DB=/tmp/certflow.db
+CERTFLOW_DB=<managed Postgres connection string from Render>
 CERTFLOW_AI_PROVIDER=local
 CERTFLOW_OTEL_STDOUT=true
 ```
@@ -59,4 +59,4 @@ OPENAI_MODEL=gpt-5.5
 
 ## Notes
 
-The default deployment uses ephemeral SQLite storage and seeded demo data. For a longer-lived deployment, mount persistent storage or move the store implementation to Postgres.
+The Render blueprint provisions a managed Postgres database and injects its connection string into `CERTFLOW_DB`. For local demos, keep using `tmp/certflow.db`.

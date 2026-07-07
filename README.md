@@ -74,10 +74,17 @@ If the local environment cannot reach public DNS/TLS endpoints, seed the dashboa
 go run ./cmd/certflow seed --db tmp/certflow.db
 ```
 
-SQLite is the default backend for `.db`, `.sqlite`, and `.sqlite3` paths. A `.json` path uses the lightweight JSON store:
+SQLite is the default backend for `.db`, `.sqlite`, and `.sqlite3` paths. A Postgres connection string uses the Postgres store. A `.json` path uses the lightweight JSON store:
 
 ```bash
 go run ./cmd/certflow seed --db tmp/certflow.json
+```
+
+Postgres example:
+
+```bash
+export CERTFLOW_DB=postgres://user:pass@localhost:5432/certflow?sslmode=disable
+go run ./cmd/certflow seed
 ```
 
 ## Import Provider Fixtures

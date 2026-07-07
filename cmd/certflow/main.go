@@ -55,7 +55,7 @@ func main() {
 
 func runSeed(args []string) error {
 	fs := flag.NewFlagSet("seed", flag.ExitOnError)
-	dbPath := fs.String("db", "tmp/certflow.db", "path to SQLite or JSON database")
+	dbPath := fs.String("db", defaultDBPath(), "path to SQLite, Postgres, or JSON database")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -100,7 +100,7 @@ func runImport(args []string) error {
 	fs := flag.NewFlagSet("import", flag.ExitOnError)
 	provider := fs.String("provider", "", "provider: aws-acm, gcp-certificate-manager, cert-manager")
 	fixturePath := fs.String("fixture", "", "path to provider fixture JSON")
-	dbPath := fs.String("db", "tmp/certflow.db", "path to SQLite or JSON database")
+	dbPath := fs.String("db", defaultDBPath(), "path to SQLite, Postgres, or JSON database")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -145,7 +145,7 @@ func runImport(args []string) error {
 func runScan(args []string) error {
 	fs := flag.NewFlagSet("scan", flag.ExitOnError)
 	targetsPath := fs.String("targets", "fixtures/demo-domains.yaml", "path to targets YAML")
-	dbPath := fs.String("db", "tmp/certflow.db", "path to SQLite or JSON database")
+	dbPath := fs.String("db", defaultDBPath(), "path to SQLite, Postgres, or JSON database")
 	name := fs.String("name", "cli-scan", "scan name")
 	insecure := fs.Bool("insecure-skip-verify", false, "skip TLS verification for local demos")
 	if err := fs.Parse(args); err != nil {
@@ -175,7 +175,7 @@ func runScan(args []string) error {
 
 func runServe(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
-	dbPath := fs.String("db", "tmp/certflow.db", "path to SQLite or JSON database")
+	dbPath := fs.String("db", defaultDBPath(), "path to SQLite, Postgres, or JSON database")
 	addr := fs.String("addr", "127.0.0.1:8080", "listen address")
 	insecure := fs.Bool("insecure-skip-verify", true, "skip TLS verification for local demo scans")
 	if err := fs.Parse(args); err != nil {
@@ -199,7 +199,7 @@ func runServe(args []string) error {
 
 func runRisks(args []string) error {
 	fs := flag.NewFlagSet("risks", flag.ExitOnError)
-	dbPath := fs.String("db", "tmp/certflow.db", "path to SQLite or JSON database")
+	dbPath := fs.String("db", defaultDBPath(), "path to SQLite, Postgres, or JSON database")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -222,7 +222,7 @@ func runRisks(args []string) error {
 
 func runReport(args []string) error {
 	fs := flag.NewFlagSet("report", flag.ExitOnError)
-	dbPath := fs.String("db", "tmp/certflow.db", "path to SQLite or JSON database")
+	dbPath := fs.String("db", defaultDBPath(), "path to SQLite, Postgres, or JSON database")
 	certID := fs.String("certificate-id", "", "certificate ID")
 	outPath := fs.String("out", "", "optional markdown output path")
 	if err := fs.Parse(args); err != nil {
@@ -347,6 +347,16 @@ func loadTargets(path string) ([]domain.Target, error) {
 }
 
 func openStore(path string) (app.Store, func(), error) {
+	if strings.TrimSpace(path) == "" {
+		path = defaultDBPath()
+	}
+	if strings.HasPrefix(path, "postgres://") || strings.HasPrefix(path, "postgresql://") {
+		st, err := store.NewPostgresStore(path)
+		if err != nil {
+			return nil, func() {}, err
+		}
+		return st, func() { _ = st.Close() }, nil
+	}
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".db", ".sqlite", ".sqlite3":
 		st, err := store.NewSQLiteStore(path)
@@ -357,6 +367,16 @@ func openStore(path string) (app.Store, func(), error) {
 	default:
 		return store.NewJSONStore(path), func() {}, nil
 	}
+}
+
+func defaultDBPath() string {
+	if value := strings.TrimSpace(os.Getenv("CERTFLOW_DB")); value != "" {
+		return value
+	}
+	if value := strings.TrimSpace(os.Getenv("DATABASE_URL")); value != "" {
+		return value
+	}
+	return "tmp/certflow.db"
 }
 
 func reportGeneratorFromEnv() report.Generator {

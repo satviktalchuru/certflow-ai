@@ -5,11 +5,17 @@ services:
     plan: free
     autoDeploy: true
     envVars:
-      - key: CERTFLOW_DB
-        value: /tmp/certflow.db
       - key: CERTFLOW_AI_PROVIDER
         value: local
       - key: CERTFLOW_OTEL_STDOUT
         value: "true"
       - key: OTEL_SERVICE_NAME
         value: certflow-ai
+      - key: CERTFLOW_DB
+        fromDatabase:
+          name: certflow-ai-db
+          property: connectionString
+
+databases:
+  - name: certflow-ai-db
+    plan: free
