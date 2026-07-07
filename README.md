@@ -8,8 +8,6 @@ The web app is intentionally lightweight: it gives recruiters and engineers a fa
 
 Live demo: deploy-ready via Render. See [Deployment](#deployment).
 
-![CertFlow AI dashboard](docs/assets/certflow-dashboard.png)
-
 ## Why This Exists
 
 Large software companies often spread certificate ownership across load balancers, Kubernetes ingress, cloud certificate managers, service teams, and internal runbooks. The outage risk is not just that a certificate expires. The harder operational questions are:
@@ -251,7 +249,3 @@ CertFlow includes:
 - [docs/deployment.md](docs/deployment.md)
 
 The Render blueprint provisions a managed Postgres database and injects its connection string into `CERTFLOW_DB`.
-
-## Resume Bullet
-
-> Built CertFlow AI, a Go-based certificate reliability platform with concurrent TLS/x509 scanning, SQLite/Postgres-backed inventory, OpenAPI REST endpoints, AWS ACM/GCP/cert-manager importers, OpenTelemetry OTLP instrumentation, and AI-assisted handoff reports for SRE ownership workflows.
