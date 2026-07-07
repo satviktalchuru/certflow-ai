@@ -11,3 +11,5 @@ services:
         value: local
       - key: CERTFLOW_OTEL_STDOUT
         value: "true"
+      - key: OTEL_SERVICE_NAME
+        value: certflow-ai

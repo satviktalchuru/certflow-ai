@@ -371,11 +371,7 @@ func reportGeneratorFromEnv() report.Generator {
 }
 
 func setupTelemetry() (*observability.Telemetry, func(context.Context) error, error) {
-	stdout := strings.EqualFold(os.Getenv("CERTFLOW_OTEL_STDOUT"), "true")
-	return observability.Setup(context.Background(), observability.Config{
-		ServiceName: "certflow-ai",
-		Stdout:      stdout,
-	})
+	return observability.Setup(context.Background(), observability.ConfigFromEnv())
 }
 
 func writeTargets(path string, targets []domain.Target) error {

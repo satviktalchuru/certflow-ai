@@ -35,3 +35,20 @@ func TestTelemetryRecordsScanMetrics(t *testing.T) {
 		t.Fatalf("record scan result: %v", err)
 	}
 }
+
+func TestConfigFromEnvEnablesOTLPWhenEndpointIsSet(t *testing.T) {
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "https://otel.example.com")
+	t.Setenv("CERTFLOW_OTEL_STDOUT", "false")
+
+	cfg := ConfigFromEnv()
+
+	if !cfg.OTLP {
+		t.Fatal("expected OTLP to be enabled")
+	}
+	if cfg.OTLPEndpoint != "https://otel.example.com" {
+		t.Fatalf("unexpected endpoint %q", cfg.OTLPEndpoint)
+	}
+	if cfg.Stdout {
+		t.Fatal("did not expect stdout telemetry")
+	}
+}

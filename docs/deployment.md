@@ -41,6 +41,14 @@ CERTFLOW_AI_PROVIDER=local
 CERTFLOW_OTEL_STDOUT=true
 ```
 
+Optional OTLP exporter settings:
+
+```text
+OTEL_EXPORTER_OTLP_ENDPOINT=https://otel-collector.example.com
+OTEL_SERVICE_NAME=certflow-ai
+OTEL_EXPORTER_OTLP_INSECURE=false
+```
+
 For OpenAI-backed report generation, add:
 
 ```text

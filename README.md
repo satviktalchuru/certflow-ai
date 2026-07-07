@@ -176,6 +176,16 @@ Current instrumentation:
   - `certflow_scan_failures_total`
   - `certflow_scan_duration_seconds`
 
+To export to an OTLP-compatible collector or vendor gateway:
+
+```bash
+export OTEL_EXPORTER_OTLP_ENDPOINT=https://otel-collector.example.com
+export OTEL_SERVICE_NAME=certflow-ai
+export OTEL_EXPORTER_OTLP_INSECURE=false
+```
+
+This works with collector-backed Datadog, New Relic, Grafana/Tempo, Honeycomb, and other OTLP-compatible telemetry pipelines.
+
 Example scan request:
 
 ```bash

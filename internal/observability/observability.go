@@ -3,10 +3,14 @@ package observability
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/exporters/stdout/stdoutmetric"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
 	"go.opentelemetry.io/otel/metric"
@@ -18,8 +22,11 @@ import (
 )
 
 type Config struct {
-	ServiceName string
-	Stdout      bool
+	ServiceName  string
+	Stdout       bool
+	OTLP         bool
+	OTLPEndpoint string
+	OTLPInsecure bool
 }
 
 type Telemetry struct {
@@ -35,6 +42,10 @@ func Setup(ctx context.Context, cfg Config) (*Telemetry, func(context.Context) e
 	if serviceName == "" {
 		serviceName = "certflow-ai"
 	}
+	if cfg.OTLPEndpoint != "" {
+		cfg.OTLP = true
+	}
+	currentOTLPConfig = cfg
 	res, err := resource.Merge(resource.Default(), resource.NewWithAttributes(
 		"",
 		semconv.ServiceName(serviceName),
@@ -87,6 +98,16 @@ func Setup(ctx context.Context, cfg Config) (*Telemetry, func(context.Context) e
 	return telemetry, shutdown, nil
 }
 
+func ConfigFromEnv() Config {
+	return Config{
+		ServiceName:  envDefault("OTEL_SERVICE_NAME", "certflow-ai"),
+		Stdout:       strings.EqualFold(os.Getenv("CERTFLOW_OTEL_STDOUT"), "true"),
+		OTLP:         os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != "",
+		OTLPEndpoint: os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
+		OTLPInsecure: strings.EqualFold(os.Getenv("OTEL_EXPORTER_OTLP_INSECURE"), "true"),
+	}
+}
+
 func (t *Telemetry) RecordScanResult(ctx context.Context, source string, targets, failures int, durationSeconds float64) error {
 	if t == nil {
 		return nil
@@ -109,6 +130,20 @@ func traceProvider(ctx context.Context, res *resource.Resource, stdout bool) (*s
 		}
 		options = append(options, sdktrace.WithBatcher(exporter))
 	}
+	if currentOTLPConfig.OTLP {
+		exporterOptions := []otlptracehttp.Option{}
+		if currentOTLPConfig.OTLPEndpoint != "" {
+			exporterOptions = append(exporterOptions, otlptracehttp.WithEndpointURL(currentOTLPConfig.OTLPEndpoint))
+		}
+		if currentOTLPConfig.OTLPInsecure {
+			exporterOptions = append(exporterOptions, otlptracehttp.WithInsecure())
+		}
+		exporter, err := otlptracehttp.New(ctx, exporterOptions...)
+		if err != nil {
+			return nil, nil, err
+		}
+		options = append(options, sdktrace.WithBatcher(exporter))
+	}
 	provider := sdktrace.NewTracerProvider(options...)
 	return provider, provider.Shutdown, nil
 }
@@ -125,8 +160,32 @@ func meterProvider(ctx context.Context, res *resource.Resource, stdout bool) (*s
 		reader := sdkmetric.NewPeriodicReader(exporter, sdkmetric.WithInterval(5*time.Second))
 		options = append(options, sdkmetric.WithReader(reader))
 	}
+	if currentOTLPConfig.OTLP {
+		exporterOptions := []otlpmetrichttp.Option{}
+		if currentOTLPConfig.OTLPEndpoint != "" {
+			exporterOptions = append(exporterOptions, otlpmetrichttp.WithEndpointURL(currentOTLPConfig.OTLPEndpoint))
+		}
+		if currentOTLPConfig.OTLPInsecure {
+			exporterOptions = append(exporterOptions, otlpmetrichttp.WithInsecure())
+		}
+		exporter, err := otlpmetrichttp.New(ctx, exporterOptions...)
+		if err != nil {
+			return nil, nil, err
+		}
+		reader := sdkmetric.NewPeriodicReader(exporter, sdkmetric.WithInterval(5*time.Second))
+		options = append(options, sdkmetric.WithReader(reader))
+	}
 	provider := sdkmetric.NewMeterProvider(options...)
 	return provider, provider.Shutdown, nil
+}
+
+var currentOTLPConfig Config
+
+func envDefault(key, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+		return value
+	}
+	return fallback
 }
 
 func SpanName(component, operation string) string {
